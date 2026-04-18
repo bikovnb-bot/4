@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}Редактирование пользователя{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Кнопка Назад -->
+    <div class="mb-3">
+        <a href="{% url 'users:user_list' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Назад к списку
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h3 class="mb-0">
+                <i class="bi bi-pencil-square"></i> Редактирование пользователя: {{ user.username }}
+            </h3>
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                
+                <!-- Основная информация -->
+                <h5 class="mb-3">Основная информация</h5>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Логин</label>
+                        <input type="text" class="form-control" value="{{ user.username }}" disabled>
+                        <small class="text-muted">Логин нельзя изменить</small>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" name="email" class="form-control" value="{{ user.email }}" required>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Имя</label>
+                        <input type="text" name="first_name" class="form-control" value="{{ user.first_name }}">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Фамилия</label>
+                        <input type="text" name="last_name" class="form-control" value="{{ user.last_name }}">
+                    </div>
+                </div>
+
+                <!-- Статус активности -->
+                <h5 class="mb-3 mt-4">Статус</h5>
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <div class="form-check form-switch">
+                            <input type="checkbox" name="is_active" class="form-check-input" id="is_active" 
+                                   style="width: 3em; height: 1.5em; cursor: pointer;"
+                                   {% if user.profile.is_active %}checked{% endif %}>
+                            <label class="form-check-label ms-2" for="is_active" style="font-size: 1.1rem;">
+                                {% if user.profile.is_active %}
+                                    <span class="text-success"><i class="bi bi-check-circle-fill"></i> Активен (может входить в систему)</span>
+                                {% else %}
+                                    <span class="text-danger"><i class="bi bi-x-circle-fill"></i> Заблокирован (не может входить в систему)</span>
+                                {% endif %}
+                            </label>
+                        </div>
+                        <small class="text-muted d-block mt-1">
+                            При отключении этой опции пользователь не сможет войти в систему
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Права доступа -->
+                <h5 class="mb-3 mt-4">Права доступа</h5>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Роль</label>
+                        <select name="role" class="form-select">
+                            <option value="ADMIN" {% if user.profile.role == 'ADMIN' %}selected{% endif %}>
+                                👑 Администратор (полный доступ)
+                            </option>
+                            <option value="MANAGER" {% if user.profile.role == 'MANAGER' %}selected{% endif %}>
+                                📋 Менеджер (создание, редактирование, удаление)
+                            </option>
+                            <option value="VIEWER" {% if user.profile.role == 'VIEWER' %}selected{% endif %}>
+                                👁️ Наблюдатель (только просмотр)
+                            </option>
+                            <option value="CONTRACTOR" {% if user.profile.role == 'CONTRACTOR' %}selected{% endif %}>
+                                🔧 Исполнитель (только свои договоры)
+                            </option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Статистика активности</label>
+                        <div class="alert alert-secondary p-2 mb-0">
+                            <small>
+                                <i class="bi bi-graph-up"></i> Входов: {{ user.profile.login_count|default:0 }}<br>
+                                <i class="bi bi-clock-history"></i> Последняя активность: 
+                                {% if user.profile.last_activity %}
+                                    {{ user.profile.last_activity|date:"d.m.Y H:i" }}
+                                {% else %}
+                                    не зафиксирована
+                                {% endif %}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Описание ролей:</strong><br>
+                            <ul class="mb-0 mt-1">
+                                <li><strong>👑 Администратор:</strong> полный доступ ко всем функциям, управление пользователями</li>
+                                <li><strong>📋 Менеджер:</strong> может создавать, редактировать, удалять договоры</li>
+                                <li><strong>👁️ Наблюдатель:</strong> только просмотр договоров и отчётов</li>
+                                <li><strong>🔧 Исполнитель:</strong> видит и редактирует только договоры, где он указан</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Контактная информация -->
+                <h5 class="mb-3 mt-4">Контактная информация</h5>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Телефон</label>
+                        <input type="tel" name="phone" class="form-control" value="{{ user.profile.phone }}" placeholder="+7 (XXX) XXX-XX-XX">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Должность</label>
+                        <input type="text" name="position" class="form-control" value="{{ user.profile.position }}" placeholder="Например: Главный инженер">
+                    </div>
+                </div>
+
+                <!-- Дополнительная информация о пользователе -->
+                <h5 class="mb-3 mt-4">Дополнительная информация</h5>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Дата регистрации</label>
+                        <input type="text" class="form-control" value="{{ user.date_joined|date:'d.m.Y H:i:s' }}" disabled>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Последний вход</label>
+                        <input type="text" class="form-control" value="{{ user.last_login|date:'d.m.Y H:i:s'|default:'никогда' }}" disabled>
+                    </div>
+                </div>
+
+                <!-- Кнопка смены пароля -->
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div class="alert alert-warning d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-key"></i>
+                                <strong>Безопасность:</strong> Рекомендуется регулярно менять пароль
+                            </div>
+                            <a href="{% url 'users:user_change_password' user.id %}" class="btn btn-outline-warning">
+                                <i class="bi bi-key"></i> Сменить пароль
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Информация о статусе -->
+                <div class="alert alert-info mt-3">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Информация:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>При блокировке пользователя он не сможет войти в систему</li>
+                        <li>Для исполнителя важно, чтобы его ФИО совпадало с полями "Исполнитель" или "Контактное лицо" в договоре</li>
+                        <li>Пользователь получит уведомление о смене пароля (если настроена почта)</li>
+                    </ul>
+                </div>
+
+                <hr>
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'users:user_list' %}" class="btn btn-secondary">
+                        <i class="bi bi-x-circle"></i> Отмена
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Сохранить изменения
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Обновление текста статуса при переключении чекбокса
+    document.getElementById('is_active').addEventListener('change', function() {
+        const label = document.querySelector('label[for="is_active"]');
+        if (this.checked) {
+            label.innerHTML = '<span class="text-success"><i class="bi bi-check-circle-fill"></i> Активен (может входить в систему)</span>';
+        } else {
+            label.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle-fill"></i> Заблокирован (не может входить в систему)</span>';
+        }
+    });
+</script>
+{% endblock %}
