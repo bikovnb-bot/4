@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Доступ запрещён - 403{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card text-center shadow-lg border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h1 class="display-4 mb-0">🚫 403</h1>
+                </div>
+                <div class="card-body py-5">
+                    <div class="mb-4">
+                        <i class="bi bi-shield-lock" style="font-size: 5rem; color: #dc3545;"></i>
+                    </div>
+                    <h2 class="card-title text-danger">Доступ запрещён</h2>
+                    <p class="card-text lead mt-3">
+                        У вас недостаточно прав для просмотра этой страницы.
+                    </p>
+                    <p class="card-text text-muted">
+                        Пожалуйста, обратитесь к администратору, если вы считаете, что это ошибка.
+                    </p>
+                    <hr class="my-4">
+                    <div class="d-flex justify-content-center gap-3">
+                        <a href="{% url 'home' %}" class="btn btn-primary btn-lg">
+                            🏠 На главную
+                        </a>
+                        <a href="{% url 'exploitation_app:report_list' %}" class="btn btn-outline-secondary btn-lg">
+                            📊 К отчётам
+                        </a>
+                        {% if not user.is_authenticated %}
+                            <a href="{% url 'login' %}" class="btn btn-outline-success btn-lg">
+                                🔑 Войти
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-footer text-muted">
+                    Если вы считаете, что это ошибка, обратитесь к системному администратору.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
