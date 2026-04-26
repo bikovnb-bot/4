@@ -53,12 +53,20 @@
         .flatpickr-calendar {
             font-size: 0.9rem;
         }
+        
+        /* Анимация для исчезновения сообщений */
+        .alert {
+            transition: opacity 0.5s ease;
+        }
+        .alert.fade-out {
+            opacity: 0;
+        }
     </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
-            <a class="navbar-brand" href="/">
+            <a class="navbar-brand" href="{% url 'core:home' %}">
                 🏢 Эксплуатация зданий
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -67,34 +75,50 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="/">
+                        <a class="nav-link" href="{% url 'core:home' %}">
                             <i class="bi bi-house"></i> Главная
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'exploitation_app:contract_list' %}">
+                    <!-- Договоры (выпадающее меню) -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="contractsDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-file-text"></i> Договоры
                         </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'exploitation_app:contract_list' %}">Список договоров</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'exploitation_app:contract_report_advanced' %}">Расширенный отчёт</a></li>
+                            <li><a class="dropdown-item" href="{% url 'exploitation_app:year_over_year_report' %}">Сравнение оплат</a></li>
+                        </ul>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'exploitation_app:report_list' %}">
-                            <i class="bi bi-graph-up"></i> Отчёты
+                    <!-- Приборы учёта (выпадающее меню) -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="energyDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-battery-charging"></i> Приборы учёта
                         </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'energy:meter_list' %}">Список приборов</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'energy:consumption_report' %}">Отчёт по потреблению</a></li>
+                            <li><a class="dropdown-item" href="{% url 'energy:anomaly_report' %}">Аномалии потребления</a></li>
+                            <li><a class="dropdown-item" href="{% url 'energy:import_readings' %}">Импорт показаний</a></li>
+                            <li><a class="dropdown-item" href="{% url 'energy:export_readings' %}">Экспорт истории</a></li>
+                        </ul>
                     </li>
-                    <!-- Ссылка на управление пользователями (только для администраторов) -->
-                    {% if is_admin %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'users:user_list' %}">
-                            <i class="bi bi-people"></i> Пользователи
+                    <!-- Администрирование (выпадающее меню, только для определённых ролей) -->
+                    {% if is_admin or user.is_staff %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-gear"></i> Администрирование
                         </a>
-                    </li>
-                    {% endif %}
-                    <!-- Ссылка на админку (только для персонала) -->
-                    {% if user.is_staff %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/">
-                            <i class="bi bi-shield-lock"></i> Админка
-                        </a>
+                        <ul class="dropdown-menu">
+                            {% if is_admin %}
+                            <li><a class="dropdown-item" href="{% url 'users:user_list' %}">Пользователи</a></li>
+                            {% endif %}
+                            {% if user.is_staff %}
+                            <li><a class="dropdown-item" href="/admin/">Админка Django</a></li>
+                            {% endif %}
+                        </ul>
                     </li>
                     {% endif %}
                 </ul>
@@ -133,6 +157,15 @@
     </nav>
 
     <main class="container mt-4">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+        
         {% block content %}
         {% endblock %}
     </main>
@@ -145,7 +178,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- Инициализация flatpickr для всех полей с классом datepicker -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             flatpickr(".datepicker", {
@@ -153,6 +185,16 @@
                 locale: "ru",
                 allowInput: true,
                 altInput: false
+            });
+            
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(function(alert) {
+                setTimeout(function() {
+                    alert.classList.add('fade-out');
+                    setTimeout(function() {
+                        alert.remove();
+                    }, 500);
+                }, 5000);
             });
         });
     </script>

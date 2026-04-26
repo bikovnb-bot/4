@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block title %}Импорт показаний{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Назад
+    </a>
+</div>
+
+<h2>📂 Импорт показаний из Excel</h2>
+
+<div class="card mb-4">
+    <div class="card-header bg-light">
+        <strong><i class="bi bi-info-circle"></i> Инструкция</strong>
+    </div>
+    <div class="card-body">
+        <p><strong>Требования к файлу Excel (.xlsx):</strong></p>
+        <ul>
+            <li>Первая строка – заголовки колонок.</li>
+            <li>Обязательные колонки: <code>meter_serial</code> (серийный номер прибора учёта), <code>date</code> (дата в формате <code>YYYY-MM-DD</code>).</li>
+            <li>Для <strong>однотарифных счётчиков</strong> нужна колонка <code>value</code> (показание).</li>
+            <li>Для <strong>многотарифных счётчиков</strong> нужно добавить колонки с названиями <strong>зон</strong> (например, «День», «Ночь»), они должны точно совпадать с названиями компонентов тарифа в системе.</li>
+            <li>Если счётчик многотарифный, колонка <code>value</code> игнорируется.</li>
+            <li>Если показание за указанную дату уже существует, оно будет обновлено.</li>
+        </ul>
+        <p><strong>Пример заполнения:</strong></p>
+        <ul>
+            <li>для однотарифного: <code>meter_serial, date, value</code></li>
+            <li>для многотарифного: <code>meter_serial, date, День, Ночь</code></li>
+        </ul>
+        <a href="{% url 'energy:download_import_template' %}" class="btn btn-outline-primary">
+            <i class="bi bi-download"></i> Скачать шаблон Excel
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-success text-white">
+        <strong><i class="bi bi-upload"></i> Загрузить файл</strong>
+    </div>
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit" class="btn btn-primary">Загрузить и импортировать</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

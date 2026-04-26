@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% load custom_filters %}
+
+{% block title %}Отчёт по потреблению{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Назад
+    </a>
+</div>
+
+<h2>📊 Отчёт по потреблению</h2>
+
+<!-- Форма выбора периода и фильтрации -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Период</label>
+                <select name="period" class="form-select" id="id_period">
+                    <option value="month" {% if period_type == 'month' %}selected{% endif %}>Месяц</option>
+                    <option value="quarter" {% if period_type == 'quarter' %}selected{% endif %}>Квартал</option>
+                    <option value="year" {% if period_type == 'year' %}selected{% endif %}>Год</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Год</label>
+                <select name="year" class="form-select">
+                    {% for y in years %}
+                        <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3" id="monthDiv">
+                <label class="form-label fw-semibold">Месяц</label>
+                <select name="month" class="form-select">
+                    {% for m in months %}
+                        <option value="{{ m.0 }}" {% if m.0 == selected_month %}selected{% endif %}>{{ m.1 }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3" id="quarterDiv" style="display: none;">
+                <label class="form-label fw-semibold">Квартал</label>
+                <select name="quarter" class="form-select">
+                    {% for q in quarters %}
+                        <option value="{{ q }}" {% if q == selected_quarter %}selected{% endif %}>{{ q }} квартал</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Тип ресурса</label>
+                <select name="group" class="form-select">
+                    <option value="all" {% if selected_group == 'all' %}selected{% endif %}>Все</option>
+                    {% for rt in resource_types %}
+                        <option value="{{ rt.id }}" {% if selected_group|stringformat:"s" == rt.id|stringformat:"s" %}selected{% endif %}>
+                            {{ rt.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 d-flex justify-content-between align-items-center mt-3">
+                <div>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Показать</button>
+                    <a href="{% url 'energy:consumption_report' %}" class="btn btn-secondary">Сбросить</a>
+                </div>
+                <a href="{% url 'energy:export_consumption_report' %}?{{ request.GET.urlencode }}" class="btn btn-success">
+                    <i class="bi bi-file-earmark-excel"></i> Экспорт в Excel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Таблица отчёта -->
+<div class="card shadow-sm">
+    <div class="card-header bg-light">
+        <strong><i class="bi bi-table"></i> Сводка за {{ period_label }}</strong>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="text-align: center; vertical-align: middle;">№</th>
+                        <th style="text-align: center; vertical-align: middle;">Прибор учёта (серийный номер)</th>
+                        <th style="text-align: center; vertical-align: middle;">Тип ресурса</th>
+                        <th style="text-align: center; vertical-align: middle;">Тип тарифа</th>
+                        <th style="text-align: center; vertical-align: middle;">Потребление (текущий период)</th>
+                        <th style="text-align: center; vertical-align: middle;">Потребление (аналог. период прошлого года)</th>
+                        <th style="text-align: center; vertical-align: middle;">Динамика</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in table_data %}
+                    <tr>
+                        <td style="text-align: center; vertical-align: middle;">{{ forloop.counter }}</td>
+                        <td style="text-align: center; vertical-align: middle;"><strong>{{ item.meter.serial_number }}</strong></td>
+                        <td style="text-align: center; vertical-align: middle;">{{ item.meter.resource_type.name }} ({{ item.meter.resource_type.unit }})</td>
+                        <td style="text-align: center; vertical-align: middle;">
+                            {% if item.meter.is_multi_tariff %}
+                                <span class="badge bg-info">многотарифный</span>
+                            {% else %}
+                                <span class="badge bg-success">одноставочный</span>
+                            {% endif %}
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;" class="fw-semibold">{{ item.consumption|floatformat:2 }} {{ item.meter.resource_type.unit }}</td>
+                        <td style="text-align: center; vertical-align: middle;" class="text-muted">{{ item.prev_consumption|floatformat:2 }} {{ item.meter.resource_type.unit }}</td>
+                        <td style="text-align: center; vertical-align: middle;">
+                            {% if item.changetype == 'increase' %}
+                                <span class="badge bg-danger bg-opacity-10 text-danger px-3 py-1">↑ {{ item.change_percent|floatformat:1 }}%</span>
+                            {% elif item.changetype == 'decrease' %}
+                                <span class="badge bg-success bg-opacity-10 text-success px-3 py-1">↓ {{ item.change_percent|floatformat:1 }}%</span>
+                            {% else %}
+                                <span class="badge bg-secondary bg-opacity-10 text-secondary px-3 py-1">0%</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">Нет данных за выбранный период</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% if table_data %}
+                <tfoot class="table-light fw-semibold">
+                    <tr>
+                        <th colspan="4" style="text-align: right; vertical-align: middle;">ИТОГО:</th>
+                        <th style="text-align: center; vertical-align: middle;">{{ total_current|floatformat:2 }} {{ total_unit }}</th>
+                        <th style="text-align: center; vertical-align: middle;">{{ total_prev|floatformat:2 }} {{ total_unit }}</th>
+                        <th style="text-align: center; vertical-align: middle;">
+                            {% if total_changetype == 'increase' %}
+                                <span class="badge bg-danger bg-opacity-10 text-danger px-3 py-1">↑ {{ total_change|floatformat:1 }}%</span>
+                            {% elif total_changetype == 'decrease' %}
+                                <span class="badge bg-success bg-opacity-10 text-success px-3 py-1">↓ {{ total_change|floatformat:1 }}%</span>
+                            {% else %}
+                                <span class="badge bg-secondary bg-opacity-10 text-secondary px-3 py-1">0%</span>
+                            {% endif %}
+                        </th>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const periodSelect = document.getElementById('id_period');
+        const monthDiv = document.getElementById('monthDiv');
+        const quarterDiv = document.getElementById('quarterDiv');
+
+        function togglePeriod() {
+            const period = periodSelect.value;
+            if (period === 'month') {
+                monthDiv.style.display = 'block';
+                quarterDiv.style.display = 'none';
+            } else if (period === 'quarter') {
+                monthDiv.style.display = 'none';
+                quarterDiv.style.display = 'block';
+            } else {
+                monthDiv.style.display = 'none';
+                quarterDiv.style.display = 'none';
+            }
+        }
+
+        periodSelect.addEventListener('change', togglePeriod);
+        togglePeriod();
+    });
+</script>
+{% endblock %}

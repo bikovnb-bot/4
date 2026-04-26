@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}Добавить показания{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>➕ Добавить показания</h2>
+    <a href="{% url 'energy:meter_list' %}" class="btn btn-secondary">← Назад к счётчикам</a>
+</div>
+<div class="card">
+    <div class="card-body">
+        <form method="post" id="readingForm">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit" class="btn btn-primary">Сохранить</button>
+        </form>
+    </div>
+</div>
+<script>
+    const meterSelect = document.getElementById('id_meter');
+    const dateInput = document.getElementById('id_date');
+    if (meterSelect && dateInput) {
+        function reloadWithParams() {
+            const meter = meterSelect.value;
+            const date = dateInput.value;
+            if (meter) {
+                let url = window.location.pathname + '?meter=' + encodeURIComponent(meter);
+                if (date) url += '&date=' + encodeURIComponent(date);
+                window.location.href = url;
+            }
+        }
+        meterSelect.addEventListener('change', reloadWithParams);
+        dateInput.addEventListener('change', reloadWithParams);
+    }
+</script>
+{% endblock %}

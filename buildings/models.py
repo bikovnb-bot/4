@@ -124,9 +124,15 @@ class Building(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
+        # Короткое представление: либо название, либо первые две части адреса
         if self.name:
-            return f"{self.name} ({self.address}, кад. №{self.cadastral_number})"
-        return f"{self.address} (кадастровый №{self.cadastral_number})"
+            return self.name
+        # Убираем кадастровый номер и лишнее из адреса
+        address = self.address
+        parts = address.split(',')
+        if len(parts) >= 2:
+            return ', '.join(parts[:2]).strip()
+        return address.strip()
 
 
 class BuildingDocument(models.Model):

@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% load custom_filters %}
+
+{% block title %}Главная панель{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="jumbotron text-center bg-light rounded p-4 mb-3">
+        <h1 class="display-5">🏢 Система учёта эксплуатации зданий</h1>
+        <p class="lead">Управление договорами, отчётность и аналитика</p>
+    </div>
+
+    <!-- Статистика по зданиям и договорам (ряд 1) -->
+    <div class="row mb-2">
+        <div class="col-md-4 mb-2">
+            <div class="card bg-primary bg-opacity-10 text-dark h-100 shadow-sm text-center">
+                <div class="card-body py-3">
+                    <i class="bi bi-building fs-2 text-primary"></i>
+                    <h3 class="mt-1 mb-0">{{ total_buildings }}</h3>
+                    <p class="mb-0 text-muted">Зданий</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-2">
+            <a href="{% url 'exploitation_app:contract_list' %}" class="text-decoration-none">
+                <div class="card bg-success bg-opacity-10 text-dark h-100 shadow-sm text-center">
+                    <div class="card-body py-3">
+                        <i class="bi bi-file-earmark-text fs-2 text-success"></i>
+                        <h3 class="mt-1 mb-0">{{ total_contracts }}</h3>
+                        <p class="mb-0 text-muted">Договоров</p>
+                        <small class="text-muted">из них действует: {{ active_contracts }}</small>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4 mb-2">
+            <a href="{% url 'exploitation_app:contract_report_advanced' %}" class="text-decoration-none">
+                <div class="card bg-warning bg-opacity-10 text-dark h-100 shadow-sm text-center">
+                    <div class="card-body py-3">
+                        <i class="bi bi-wallet2 fs-2 text-warning"></i>
+                        <h3 class="mt-1 mb-0">{{ total_amount|space_thousands }} ₽</h3>
+                        <p class="mb-0 text-muted">Общая сумма договоров</p>
+                        <small class="text-muted">Оплачено: {{ total_paid|space_thousands }} ₽</small>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- Энергоучёт (ряд 2) с заменой карточки потребления на детализацию -->
+    <div class="row mb-2">
+        <div class="col-md-4 mb-2">
+            <div class="card bg-info bg-opacity-10 text-dark h-100 shadow-sm text-center">
+                <div class="card-body py-3">
+                    <i class="bi bi-speedometer2 fs-2 text-info"></i>
+                    <h3 class="mt-1 mb-0">{{ active_meters }}</h3>
+                    <p class="mb-0 text-muted">Активных приборов учёта</p>
+                    <a href="{% url 'energy:meter_list' %}" class="stretched-link text-dark"></a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-2">
+            <div class="card bg-success bg-opacity-10 text-dark h-100 shadow-sm text-center">
+                <div class="card-body py-3">
+                    <i class="bi bi-table fs-2 text-success"></i>
+                    <h3 class="mt-1 mb-0">Детализация</h3>
+                    <p class="mb-0 text-muted">Потребление по типам</p>
+                    <a href="{% url 'energy:consumption_report' %}" class="stretched-link text-dark"></a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-2">
+            <div class="card bg-danger bg-opacity-10 text-dark h-100 shadow-sm text-center">
+                <div class="card-body py-3">
+                    <i class="bi bi-exclamation-triangle fs-2 text-danger"></i>
+                    <h3 class="mt-1 mb-0">{{ anomalies_year }}</h3>
+                    <p class="mb-0 text-muted">Аномалий</p>
+                    <a href="{% url 'energy:anomaly_report' %}" class="stretched-link text-dark"></a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Финансовый итог и Потребление по типам ресурсов (ряд 3) -->
+    <div class="row mb-2">
+        <div class="col-md-6 mb-2">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-secondary text-white py-2">
+                    <i class="bi bi-coin"></i> Финансовый итог
+                </div>
+                <div class="card-body py-2">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between py-1">
+                            <strong>Всего по договорам:</strong>
+                            <span>{{ total_amount|space_thousands }} ₽</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between py-1">
+                            <strong>Оплачено:</strong>
+                            <span class="text-success">{{ total_paid|space_thousands }} ₽</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between py-1">
+                            <strong>Осталось оплатить:</strong>
+                            <span class="text-danger">{{ remaining|space_thousands }} ₽</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-2">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-secondary text-white py-2">
+                    <i class="bi bi-bar-chart-steps"></i> Потребление по типам ресурсов
+                </div>
+                <div class="card-body py-2">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Тип ресурса</th>
+                                    <th>Потребление (ед.)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in consumption_by_type %}
+                                <tr>
+                                    <td>{{ item.name }}</td>
+                                    <td>{{ item.consumption|floatformat:1 }} {{ item.unit }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

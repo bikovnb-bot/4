@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% load custom_filters %}
+
+{% block title %}Приборы учёта{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>📋 Приборы учёта</h2>
+    {% if can_edit %}
+        <a href="{% url 'energy:add_meter' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Добавить прибор
+        </a>
+    {% endif %}
+</div>
+
+<div class="row">
+    {% for meter in meters %}
+        <div class="col-md-6 col-lg-4 mb-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Прибор учёта (№ {{ meter.serial_number }})</h5>
+                    <p class="card-text">
+                        <span class="badge bg-secondary">{{ meter.resource_type.name }}</span>
+                        {% if meter.is_multi_tariff %}
+                            <span class="badge bg-info text-dark">⏱ многотарифный</span>
+                        {% else %}
+                            <span class="badge bg-success">🔌 одноставочный</span>
+                        {% endif %}
+                        {% if meter.transformation_ratio != 1 %}
+                            <span class="badge bg-warning text-dark">K={{ meter.transformation_ratio }}</span>
+                        {% endif %}
+                    </p>
+                    <p class="card-text small text-muted">
+                        <i class="bi bi-geo-alt"></i> {{ meter.location|default:"местоположение не указано" }}
+                    </p>
+                </div>
+                <div class="card-footer bg-transparent border-0 d-flex justify-content-between align-items-center">
+                    <a href="{% url 'energy:meter_detail' meter.pk %}" class="btn btn-sm btn-outline-primary">Подробнее</a>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-success" title="Добавить показания"
+                                data-bs-toggle="modal" data-bs-target="#addReadingModal" data-meter-id="{{ meter.pk }}">
+                            <i class="bi bi-plus-circle"></i>
+                        </button>
+                        {% if can_edit %}
+                            <a href="{% url 'energy:meter_edit' meter.pk %}" class="btn btn-sm btn-outline-secondary" title="Редактировать">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                        {% endif %}
+                        {% if can_delete %}
+                            <a href="{% url 'energy:meter_delete' meter.pk %}" class="btn btn-sm btn-outline-danger" title="Удалить">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% empty %}
+        <div class="col-12 text-center text-muted py-5">
+            <i class="bi bi-inbox fs-1"></i>
+            <p class="mt-2">У вас нет приборов учёта. Добавьте первый.</p>
+            {% if can_edit %}
+                <a href="{% url 'energy:add_meter' %}" class="btn btn-primary mt-2">Добавить прибор</a>
+            {% endif %}
+        </div>
+    {% endfor %}
+</div>
+
+<!-- Модальное окно для добавления показаний -->
+<div class="modal fade" id="addReadingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Добавить показания</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="addReadingModalBody">
+                <div class="text-center">Загрузка...</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" id="saveReadingBtn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const modal = document.getElementById('addReadingModal');
+        const modalBody = document.getElementById('addReadingModalBody');
+        const saveBtn = document.getElementById('saveReadingBtn');
+        let currentMeterId = null;
+
+        modal.addEventListener('show.bs.modal', async function(event) {
+            const button = event.relatedTarget;
+            currentMeterId = button.getAttribute('data-meter-id');
+            modalBody.innerHTML = '<div class="text-center">Загрузка...</div>';
+            try {
+                const response = await fetch(`/energy/add-reading-modal/?meter_id=${currentMeterId}`);
+                const data = await response.json();
+                if (data.html) {
+                    modalBody.innerHTML = data.html;
+                } else {
+                    modalBody.innerHTML = '<div class="alert alert-danger">Ошибка загрузки формы</div>';
+                }
+            } catch (e) {
+                modalBody.innerHTML = '<div class="alert alert-danger">Ошибка загрузки</div>';
+            }
+        });
+
+        saveBtn.addEventListener('click', async function() {
+            const formHtml = modalBody.querySelector('form');
+            if (!formHtml) {
+                const formData = new FormData();
+                formData.append('meter', currentMeterId);
+                const inputs = modalBody.querySelectorAll('input, select');
+                inputs.forEach(input => {
+                    if (input.name) formData.append(input.name, input.value);
+                });
+                const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+                if (csrf) formData.append('csrfmiddlewaretoken', csrf.value);
+                const response = await fetch('/energy/add-reading-modal/', {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + JSON.stringify(result.errors));
+                }
+            } else {
+                const form = formHtml;
+                const formData = new FormData(form);
+                if (!formData.has('meter')) formData.append('meter', currentMeterId);
+                const response = await fetch('/energy/add-reading-modal/', {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + JSON.stringify(result.errors));
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

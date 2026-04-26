@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Редактирование показаний{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Назад
+    </a>
+</div>
+<div class="card">
+    <div class="card-header bg-warning text-dark">
+        <h4 class="mb-0">✏️ Редактирование показаний</h4>
+    </div>
+    <div class="card-body">
+        <p><strong>Счётчик:</strong> {{ reading.meter.serial_number }}</p>
+        <p><strong>Дата:</strong> {{ reading.date|date:"d.m.Y" }}</p>
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <input type="hidden" name="next" value="{{ request.GET.next }}">
+            <button type="submit" class="btn btn-success">Сохранить</button>
+            <a href="javascript:history.back()" class="btn btn-secondary">Отмена</a>
+        </form>
+    </div>
+</div>
+{% endblock %}
