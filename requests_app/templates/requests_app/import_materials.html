@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Импорт материалов из Excel{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="mb-3">
+        <a href="{% url 'requests_app:material_stock' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Назад к материалам
+        </a>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">📂 Импорт материалов из Excel</h4>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <a href="{% url 'requests_app:download_materials_template' %}" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-download"></i> Скачать шаблон Excel
+                </a>
+            </div>
+
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-3">
+                    {{ form.excel_file.label_tag }}
+                    {{ form.excel_file }}
+                    <small class="text-muted">{{ form.excel_file.help_text }}</small>
+                </div>
+                <button type="submit" class="btn btn-primary">Загрузить и импортировать</button>
+            </form>
+
+            <hr>
+            <h5>Требования к файлу:</h5>
+            <ul>
+                <li>Формат: <code>.xlsx</code></li>
+                <li>Первая строка – заголовки (игнорируются)</li>
+                <li>Обязательные колонки (4):</li>
+                <ol>
+                    <li><code>name</code> – наименование материала (обязательное)</li>
+                    <li><code>unit</code> – единица измерения (обязательная)</li>
+                    <li><code>default_price</code> – цена за единицу (число, разделитель точка)</li>
+                    <li><code>quantity_in_stock</code> – количество на складе (число, разделитель точка)</li>
+                </ol>
+            </ul>
+
+            <div class="alert alert-secondary">
+                <strong>Пример заполнения:</strong><br>
+                <code>name, unit, default_price, quantity_in_stock</code><br>
+                <code>Краска, л, 350.00, 100</code><br>
+                <code>Лампа светодиодная, шт, 450.00, 50</code>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12">
+                    <h6>Примечания:</h6>
+                    <ul>
+                        <li>Если материал с таким названием уже существует, он будет обновлён (обновятся единица измерения, цена и остаток).</li>
+                        <li>Название материала должно быть уникальным.</li>
+                        <li>Цена и количество могут быть дробными (разделитель – точка).</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,3 +1,5 @@
+import os
+from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -5,7 +7,7 @@ from django.urls import reverse_lazy
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.utils import timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import json
 from django.core.paginator import Paginator
 from django.http import HttpResponse
@@ -14,7 +16,7 @@ from openpyxl.styles import Font, Alignment, PatternFill
 from django.db.models import Q
 
 from .models import ServiceRequest, RequestFile, UsedMaterial, Material
-from .forms import ServiceRequestForm, RequestFileForm, ReportForm
+from .forms import ServiceRequestForm, RequestFileForm, ReportForm, ImportMaterialsForm
 from .utils import can_assign_request, can_view_all_requests
 from users.decorators import manager_required, viewer_required
 
@@ -91,12 +93,16 @@ class RequestCreateView(LoginRequiredMixin, CreateView):
 
     def form_valid(self, form):
         form.instance.created_by = self.request.user
-        response = super().form_valid(form)
+        self.object = form.save()
         files = self.request.FILES.getlist('files')
         for f in files:
             RequestFile.objects.create(request=self.object, file=f)
         messages.success(self.request, "Заявка создана")
-        return response
+        return redirect(self.success_url)
+
+    def form_invalid(self, form):
+        messages.error(self.request, f"Ошибка в форме: {form.errors}")
+        return super().form_invalid(form)
 
 
 # ------------------------------------------------------------
@@ -125,6 +131,9 @@ class RequestUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
             messages.info(self.request, "Материалы возвращены на склад.")
         else:
             messages.success(self.request, "Заявка обновлена")
+        files = self.request.FILES.getlist('files')
+        for f in files:
+            RequestFile.objects.create(request=self.object, file=f)
         return response
 
 
@@ -309,7 +318,7 @@ def material_stock_export(request):
 def custom_report(request):
     form = ReportForm(request.GET or None)
     qs = ServiceRequest.objects.select_related('building', 'created_by', 'assigned_to', 'request_type').all()
-    
+
     if form.is_valid():
         if form.cleaned_data.get('status'):
             qs = qs.filter(status=form.cleaned_data['status'])
@@ -323,15 +332,15 @@ def custom_report(request):
             qs = qs.filter(assigned_to=form.cleaned_data['assigned_to'])
         if form.cleaned_data.get('created_by'):
             qs = qs.filter(created_by=form.cleaned_data['created_by'])
+        if form.cleaned_data.get('room_number'):
+            qs = qs.filter(room_number__icontains=form.cleaned_data['room_number'])
         if form.cleaned_data.get('date_from'):
             qs = qs.filter(created_at__date__gte=form.cleaned_data['date_from'])
         if form.cleaned_data.get('date_to'):
             qs = qs.filter(created_at__date__lte=form.cleaned_data['date_to'])
-        if form.cleaned_data.get('room_number'):
-            qs = qs.filter(room_number__icontains=form.cleaned_data['room_number'])
-    
+
     columns = form.cleaned_data.get('columns') if form.is_valid() else ['request_number', 'building', 'priority', 'status', 'created_by', 'assigned_to', 'created_at']
-    
+
     data = []
     for req in qs:
         row = {}
@@ -363,7 +372,7 @@ def custom_report(request):
             elif col == 'comment':
                 row[col] = req.comment[:100] + '…' if len(req.comment) > 100 else req.comment
         data.append(row)
-    
+
     if 'export' in request.GET and request.GET.get('export') == '1':
         wb = openpyxl.Workbook()
         ws = wb.active
@@ -383,7 +392,7 @@ def custom_report(request):
         response['Content-Disposition'] = 'attachment; filename="report.xlsx"'
         wb.save(response)
         return response
-    
+
     context = {
         'form': form,
         'data': data,
@@ -391,3 +400,93 @@ def custom_report(request):
         'column_labels': dict(ReportForm.base_fields['columns'].choices),
     }
     return render(request, 'requests_app/custom_report.html', context)
+
+
+# ------------------------------------------------------------
+# Импорт материалов из Excel
+# ------------------------------------------------------------
+@login_required
+@manager_required
+def import_materials_from_excel(request):
+    if request.method == 'POST':
+        form = ImportMaterialsForm(request.POST, request.FILES)
+        if form.is_valid():
+            excel_file = request.FILES['excel_file']
+            wb = openpyxl.load_workbook(excel_file, data_only=True)
+            ws = wb.active
+
+            headers = [cell.value for cell in ws[1] if cell.value]
+            required_headers = ['name', 'unit', 'default_price', 'quantity_in_stock']
+            if not all(h in headers for h in required_headers):
+                messages.error(request, f"Файл должен содержать колонки: {', '.join(required_headers)}")
+                return redirect('requests_app:material_stock')
+
+            col_idx = {h: headers.index(h) for h in required_headers}
+            created_count = 0
+            updated_count = 0
+
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if not row or all(cell is None for cell in row):
+                    continue
+                name = row[col_idx['name']]
+                unit = row[col_idx['unit']]
+                if not name or not unit:
+                    continue
+                try:
+                    default_price = Decimal(str(row[col_idx['default_price']]))
+                    quantity_in_stock = Decimal(str(row[col_idx['quantity_in_stock']]))
+                except (ValueError, TypeError, InvalidOperation):
+                    continue
+                material, created = Material.objects.update_or_create(
+                    name=name.strip(),
+                    defaults={
+                        'unit': unit.strip(),
+                        'default_price': default_price,
+                        'quantity_in_stock': quantity_in_stock,
+                    }
+                )
+                if created:
+                    created_count += 1
+                else:
+                    updated_count += 1
+
+            messages.success(request, f"Импорт завершён. Создано: {created_count}, обновлено: {updated_count}.")
+            return redirect('requests_app:material_stock')
+    else:
+        form = ImportMaterialsForm()
+    return render(request, 'requests_app/import_materials.html', {'form': form})
+
+
+# ------------------------------------------------------------
+# Скачивание шаблона для импорта материалов
+# ------------------------------------------------------------
+@login_required
+@manager_required
+def download_materials_template(request):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Материалы"
+
+    headers = ['name', 'unit', 'default_price', 'quantity_in_stock']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="2c3e50", end_color="2c3e50", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    examples = [
+        ('Краска', 'л', 350.00, 100),
+        ('Лампа светодиодная', 'шт', 450.00, 50),
+        ('Гвозди', 'кг', 120.00, 200),
+    ]
+    for row, ex in enumerate(examples, 2):
+        for col, val in enumerate(ex, 1):
+            ws.cell(row=row, column=col, value=val)
+
+    for col in range(1, len(headers)+1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 25
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename="materials_template.xlsx"'
+    wb.save(response)
+    return response

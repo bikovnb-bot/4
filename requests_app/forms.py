@@ -88,10 +88,15 @@ class ReportForm(forms.Form):
     )
     status = forms.ChoiceField(choices=[('', 'Все')] + ServiceRequest.STATUS_CHOICES, required=False, label="Статус")
     priority = forms.ChoiceField(choices=[('', 'Все')] + ServiceRequest.PRIORITY_CHOICES, required=False, label="Приоритет")
-    room_number = forms.CharField(required=False, label="Номер помещения")
     building = forms.ModelChoiceField(queryset=Building.objects.all(), required=False, label="Здание")
     request_type = forms.ModelChoiceField(queryset=RequestType.objects.filter(is_active=True), required=False, label="Тип заявки")
     assigned_to = CustomUserChoiceField(queryset=User.objects.filter(is_active=True), required=False, label="Ответственный")
     created_by = CustomUserChoiceField(queryset=User.objects.filter(is_active=True), required=False, label="Создатель")
+    room_number = forms.CharField(required=False, label="Номер помещения")
     date_from = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}), label="Дата создания от")
     date_to = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}), label="Дата создания до")
+
+
+# Форма для импорта материалов из Excel
+class ImportMaterialsForm(forms.Form):
+    excel_file = forms.FileField(label="Excel файл")
