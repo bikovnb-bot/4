@@ -1,0 +1,35 @@
+{% extends "energy/base.html" %}
+{% block title %}{% if meter %}Счётчик №{{ meter.meter_number|default:meter.id }}{% else %}Ввод показаний{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">
+                    <i class="bi bi-pencil-square"></i>
+                    {% if meter %}
+                        {% if is_edit %}
+                            Редактирование показаний для счётчика №{{ meter.meter_number|default:meter.id }} ({{ meter.get_resource_type_display }})
+                        {% else %}
+                            Ввод показаний для счётчика №{{ meter.meter_number|default:meter.id }} ({{ meter.get_resource_type_display }})
+                        {% endif %}
+                    {% else %}
+                        Ввод показаний (многотарифный счётчик)
+                    {% endif %}
+                </h4>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    {{ form.as_p }}
+                    <div class="d-flex justify-content-between mt-4">
+                        <button type="submit" class="btn btn-success"><i class="bi bi-save"></i> Сохранить</button>
+                        <a href="{% url 'energy:meter_list' %}" class="btn btn-secondary"><i class="bi bi-x-circle"></i> Отмена</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

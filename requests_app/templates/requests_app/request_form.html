@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% load custom_filters %}
+
+{% block title %}{% if form.instance.pk %}Редактирование заявки{% else %}Новая заявка{% endif %}{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof flatpickr !== 'undefined') {
+            const dateFields = document.querySelectorAll('.datepicker');
+            if (dateFields.length) {
+                flatpickr(dateFields, {
+                    dateFormat: "d.m.Y",
+                    locale: "ru",
+                    allowInput: true
+                });
+            }
+        }
+    });
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Назад
+    </a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">{% if form.instance.pk %}✏️ Редактирование заявки № {{ form.instance.request_number }}{% else %}➕ Новая заявка{% endif %}</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="row g-3">
+                <!-- Первая колонка: здание, помещение, тип, приоритет, статус -->
+                <div class="col-md-4">
+                    {% for field in form %}
+                        {% if field.name in 'building,room_number,request_type,priority,status' %}
+                            <div class="mb-3">
+                                <label for="{{ field.id_for_label }}" class="form-label small fw-semibold">
+                                    {% if field.name == 'building' %}
+                                        <i class="bi bi-building"></i>
+                                    {% elif field.name == 'room_number' %}
+                                        <i class="bi bi-door-closed"></i>
+                                    {% elif field.name == 'request_type' %}
+                                        <i class="bi bi-tag"></i>
+                                    {% elif field.name == 'priority' %}
+                                        <i class="bi bi-flag"></i>
+                                    {% elif field.name == 'status' %}
+                                        <i class="bi bi-check-circle"></i>
+                                    {% endif %}
+                                    {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
+                                </label>
+                                {{ field }}
+                                {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
+                                {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+
+                <!-- Вторая колонка: ответственный, плановая дата, комментарий -->
+                <div class="col-md-4">
+                    {% for field in form %}
+                        {% if field.name in 'assigned_to,planned_date,comment' %}
+                            <div class="mb-3">
+                                <label for="{{ field.id_for_label }}" class="form-label small fw-semibold">
+                                    {% if field.name == 'assigned_to' %}
+                                        <i class="bi bi-person-badge"></i>
+                                    {% elif field.name == 'planned_date' %}
+                                        <i class="bi bi-calendar"></i>
+                                    {% elif field.name == 'comment' %}
+                                        <i class="bi bi-chat"></i>
+                                    {% endif %}
+                                    {{ field.label }}
+                                </label>
+                                {% if field.name == 'planned_date' %}
+                                    <input type="text" name="planned_date" value="{{ field.value|date:'d.m.Y'|default:'' }}" class="form-control datepicker" placeholder="дд.мм.гггг">
+                                {% else %}
+                                    {{ field }}
+                                {% endif %}
+                                {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
+                                {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+
+                <!-- Третья колонка: описание и файлы -->
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label for="{{ form.description.id_for_label }}" class="form-label small fw-semibold">
+                            <i class="bi bi-card-text"></i> {{ form.description.label }}{% if form.description.field.required %} <span class="text-danger">*</span>{% endif %}
+                        </label>
+                        {{ form.description }}
+                        {% if form.description.errors %}<div class="text-danger small">{{ form.description.errors }}</div>{% endif %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold"><i class="bi bi-paperclip"></i> Файлы (можно несколько)</label>
+                        <input type="file" name="files" multiple class="form-control" id="fileInput">
+                        <div id="filePreview" class="mt-2 small text-muted"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end mt-3">
+                <button type="submit" class="btn btn-primary me-2"><i class="bi bi-save"></i> Сохранить</button>
+                <a href="{% url 'requests_app:request_list' %}" class="btn btn-secondary"><i class="bi bi-x-circle"></i> Отмена</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    const fileInput = document.getElementById('fileInput');
+    const filePreview = document.getElementById('filePreview');
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            const files = Array.from(this.files);
+            if (files.length) {
+                const names = files.map(f => f.name).join(', ');
+                filePreview.innerHTML = `<i class="bi bi-file-earmark"></i> Выбрано: ${names}`;
+            } else {
+                filePreview.innerHTML = '';
+            }
+        });
+    }
+</script>
+{% endblock %}

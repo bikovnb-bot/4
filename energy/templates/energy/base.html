@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Учёт ресурсов{% endblock %}
+
+{# Можно добавить специфичные для energy стили #}
+{% block extra_css %}
+<style>
+    /* Дополнительные стили только для energy, если нужны */
+    .meter-card {
+        transition: transform 0.2s;
+    }
+    .meter-card:hover {
+        transform: translateY(-5px);
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,169 @@
+{% extends "energy/base.html" %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-speedometer2"></i> 
+                        {% if meter %}
+                            {{ title }} №{{ meter.meter_number|default:meter.id }} ({{ meter.get_resource_type_display }})
+                        {% else %}
+                            {{ title }}
+                        {% endif %}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data" novalidate>
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                        {% endif %}
+                        
+                        <div class="row g-3">
+                            <!-- Здание -->
+                            <div class="col-md-6">
+                                <label for="id_building" class="form-label"><i class="bi bi-building"></i> Здание</label>
+                                {{ form.building }}
+                                {{ form.building.errors }}
+                            </div>
+                            <!-- Тип ресурса -->
+                            <div class="col-md-6">
+                                <label for="id_resource_type" class="form-label"><i class="bi bi-droplet"></i> Тип ресурса</label>
+                                {{ form.resource_type }}
+                                {{ form.resource_type.errors }}
+                            </div>
+                            <!-- Номер счётчика -->
+                            <div class="col-md-6">
+                                <label for="id_meter_number" class="form-label"><i class="bi bi-hash"></i> Номер счётчика</label>
+                                {{ form.meter_number }}
+                                {{ form.meter_number.errors }}
+                            </div>
+                            <!-- Единица измерения -->
+                            <div class="col-md-6">
+                                <label for="id_unit" class="form-label"><i class="bi bi-rulers"></i> Единица измерения</label>
+                                {{ form.unit }}
+                                {{ form.unit.errors }}
+                            </div>
+                            <!-- Дата установки -->
+                            <div class="col-md-6">
+                                <label for="id_installation_date" class="form-label"><i class="bi bi-calendar-plus"></i> Дата установки</label>
+                                <input type="text" name="installation_date" class="form-control datepicker" value="{{ form.installation_date.value|default:'' }}" id="id_installation_date">
+                                {{ form.installation_date.errors }}
+                            </div>
+                            <!-- Начальные показания -->
+                            <div class="col-md-6">
+                                <label for="id_initial_reading" class="form-label"><i class="bi bi-bar-chart-steps"></i> Начальные показания</label>
+                                {{ form.initial_reading }}
+                                {{ form.initial_reading.errors }}
+                            </div>
+                            <!-- Коэффициент трансформации -->
+                            <div class="col-md-6">
+                                <label for="id_transformation_ratio" class="form-label"><i class="bi bi-calculator"></i> Коэффициент трансформации</label>
+                                {{ form.transformation_ratio }}
+                                <small class="text-muted">(по умолчанию 1.0)</small>
+                                {{ form.transformation_ratio.errors }}
+                            </div>
+                            <!-- Дата поверки -->
+                            <div class="col-md-6">
+                                <label for="id_next_verification_date" class="form-label"><i class="bi bi-calendar-check"></i> Дата очередной поверки</label>
+                                <input type="text" name="next_verification_date" class="form-control datepicker" value="{{ form.next_verification_date.value|default:'' }}" id="id_next_verification_date">
+                                {{ form.next_verification_date.errors }}
+                            </div>
+                            
+                            <!-- Нерегулируемый тариф (чекбокс) -->
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    {{ form.is_unregulated_tariff }}
+                                    <label class="form-check-label" for="id_is_unregulated_tariff">
+                                        <i class="bi bi-toggles"></i> Нерегулируемый тариф
+                                    </label>
+                                    <div class="form-text">Если активно, при вводе показаний потребуется вручную указывать тарифы. Если нет – будут использоваться тарифы по умолчанию, но их можно менять через управление тарифами.</div>
+                                </div>
+                                {{ form.is_unregulated_tariff.errors }}
+                            </div>
+                            
+                            <!-- Тарифы по умолчанию (используются, если чекбокс выключен) -->
+                            <div class="col-md-4">
+                                <label for="id_default_tariff1_rate" class="form-label"><i class="bi bi-tag"></i> Тариф Т1 по умолчанию (руб/ед)</label>
+                                {{ form.default_tariff1_rate }}
+                                {{ form.default_tariff1_rate.errors }}
+                            </div>
+                            <div class="col-md-4">
+                                <label for="id_default_tariff2_rate" class="form-label"><i class="bi bi-tag"></i> Тариф Т2 по умолчанию (руб/ед)</label>
+                                {{ form.default_tariff2_rate }}
+                                {{ form.default_tariff2_rate.errors }}
+                            </div>
+                            <div class="col-md-4">
+                                <label for="id_default_tariff3_rate" class="form-label"><i class="bi bi-tag"></i> Тариф Т3 по умолчанию (руб/ед)</label>
+                                {{ form.default_tariff3_rate }}
+                                {{ form.default_tariff3_rate.errors }}
+                            </div>
+                            
+                            <!-- Документ -->
+                            <div class="col-12">
+                                <label for="id_document" class="form-label"><i class="bi bi-file-pdf"></i> Документ (паспорт счётчика)</label>
+                                {{ form.document }}
+                                {{ form.document.errors }}
+                            </div>
+                            
+                            <!-- Многотарифный чекбокс -->
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    {{ form.is_multitariff }}
+                                    <label class="form-check-label" for="id_is_multitariff">
+                                        <i class="bi bi-diagram-3"></i> Многотарифный счётчик (Т1, Т2, Т3)
+                                    </label>
+                                    <div class="form-text">Активируйте, если счётчик поддерживает раздельные показания по трём тарифам</div>
+                                </div>
+                                {{ form.is_multitariff.errors }}
+                            </div>
+                            
+                            <!-- Примечания -->
+                            <div class="col-12">
+                                <label for="id_notes" class="form-label"><i class="bi bi-chat"></i> Примечания</label>
+                                {{ form.notes }}
+                                {{ form.notes.errors }}
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        <div class="d-flex justify-content-between">
+                            <button type="submit" class="btn btn-success px-4"><i class="bi bi-save"></i> Сохранить</button>
+                            <a href="{% url 'energy:meter_list' %}" class="btn btn-secondary"><i class="bi bi-x-circle"></i> Отмена</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Добавляем классы Bootstrap
+        const formControls = document.querySelectorAll('input, select, textarea');
+        formControls.forEach(field => {
+            if (!field.classList.contains('form-control') && !field.classList.contains('form-check-input') && field.id !== 'id_is_multitariff' && field.id !== 'id_is_unregulated_tariff') {
+                if (field.type !== 'checkbox' && field.type !== 'file') {
+                    field.classList.add('form-control');
+                }
+            }
+        });
+        const multitariffCheckbox = document.getElementById('id_is_multitariff');
+        if (multitariffCheckbox) multitariffCheckbox.classList.add('form-check-input');
+        const unregulatedCheckbox = document.getElementById('id_is_unregulated_tariff');
+        if (unregulatedCheckbox) unregulatedCheckbox.classList.add('form-check-input');
+        const selects = document.querySelectorAll('select');
+        selects.forEach(select => select.classList.add('form-select'));
+    });
+</script>
+{% endblock %}

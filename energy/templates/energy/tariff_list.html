@@ -1,0 +1,107 @@
+{% extends "energy/base.html" %}
+{% block title %}Тарифы{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0">
+            <i class="bi bi-tags"></i> 
+            {% if selected_meter %}
+                Тарифы для счётчика №{{ selected_meter.meter_number|default:selected_meter.id }} ({{ selected_meter.get_resource_type_display }})
+            {% else %}
+                Все тарифы
+            {% endif %}
+        </h4>
+        <div>
+            {% if selected_meter %}
+                <a href="{% url 'energy:meter_detail' selected_meter.id %}" class="btn btn-outline-secondary btn-sm me-2">
+                    <i class="bi bi-arrow-left"></i> Назад к счётчику
+                </a>
+                <a href="{% url 'energy:tariff_create' %}?meter={{ selected_meter.id }}" class="btn btn-success btn-sm">
+                    <i class="bi bi-plus-circle"></i> Добавить тариф
+                </a>
+            {% else %}
+                <a href="{% url 'energy:tariff_create' %}" class="btn btn-success btn-sm">
+                    <i class="bi bi-plus-circle"></i> Добавить тариф
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Форма фильтрации по счётчику (только если нет выбранного) -->
+    {% if not selected_meter %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Счётчик</label>
+                    <select name="meter" class="form-select">
+                        <option value="">Все счётчики</option>
+                        {% for meter in all_meters %}
+                            <option value="{{ meter.id }}" {% if request.GET.meter == meter.id|stringformat:"s" %}selected{% endif %}>
+                                {{ meter.building.name }} — {{ meter.get_resource_type_display }} ({{ meter.meter_number|default:"без номера" }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 align-self-end">
+                    <button type="submit" class="btn btn-primary">Показать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Счётчик</th>
+                            <th>Название</th>
+                            <th>Дата начала</th>
+                            <th>Дата окончания</th>
+                            <th>Т1 (руб)</th>
+                            <th>Т2 (руб)</th>
+                            <th>Т3 (руб)</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tariff in tariffs %}
+                        <tr>
+                            <td>{{ tariff.meter }} — {{ tariff.meter.building.name }} ({{ tariff.meter.get_resource_type_display }})</td>
+                            <td>{{ tariff.name }}</td>
+                            <td>{{ tariff.start_date|date:"d.m.Y" }}</td>
+                            <td>{{ tariff.end_date|date:"d.m.Y"|default:"—" }}</td>
+                            <td>{{ tariff.tariff1_rate|floatformat:2 }}</td>
+                            <td>{{ tariff.tariff2_rate|floatformat:2 }}</td>
+                            <td>{{ tariff.tariff3_rate|floatformat:2 }}</td>
+                            <td>
+                                <a href="{% url 'energy:tariff_edit' tariff.id %}" class="btn btn-sm btn-warning" title="Редактировать">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <a href="{% url 'energy:tariff_delete' tariff.id %}" class="btn btn-sm btn-danger" title="Удалить">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted">
+                                {% if selected_meter %}
+                                    Тарифов для этого счётчика пока нет.
+                                {% else %}
+                                    Тарифы отсутствуют.
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

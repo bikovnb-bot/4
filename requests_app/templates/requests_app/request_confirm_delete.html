@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}Удаление заявки{% endblock %}
+{% block content %}
+<div class="card border-danger">
+    <div class="card-header bg-danger text-white">
+        <h4 class="mb-0">Подтверждение удаления</h4>
+    </div>
+    <div class="card-body">
+        <p>Вы действительно хотите удалить заявку <strong>{{ request_obj.request_number }}</strong>?</p>
+        <p>Это действие необратимо.</p>
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Да, удалить</button>
+            <a href="{% url 'requests_app:request_detail' request_obj.pk %}" class="btn btn-secondary">Отмена</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

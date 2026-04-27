@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% load custom_filters %}
+
+{% block title %}Настраиваемый отчёт по заявкам{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Назад
+    </a>
+</div>
+
+<h2>📊 Настраиваемый отчёт по заявкам</h2>
+
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light">
+        <strong><i class="bi bi-funnel"></i> Фильтры и настройки</strong>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <!-- Выбор колонок -->
+            <div class="col-md-12">
+                <label class="form-label fw-semibold">Отображаемые колонки</label>
+                <div class="row">
+                    {% for value, label in form.columns.field.choices %}
+                        <div class="col-md-3">
+                            <div class="form-check">
+                                <input type="checkbox" name="columns" value="{{ value }}" id="col_{{ value }}" class="form-check-input"
+                                    {% if value in form.columns.value %}checked{% endif %}>
+                                <label for="col_{{ value }}" class="form-check-label">{{ label }}</label>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Фильтры -->
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Статус</label>
+                {{ form.status }}
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Приоритет</label>
+                {{ form.priority }}
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Здание</label>
+                {{ form.building }}
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Тип заявки</label>
+                {{ form.request_type }}
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Номер помещения</label>
+                {{ form.room_number }}
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Ответственный</label>
+                {{ form.assigned_to }}
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Создатель</label>
+                {{ form.created_by }}
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Дата создания от</label>
+                {{ form.date_from }}
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Дата создания до</label>
+                {{ form.date_to }}
+            </div>
+
+            <div class="col-md-12 d-flex justify-content-end">
+                <button type="submit" class="btn btn-primary me-2"><i class="bi bi-search"></i> Сформировать</button>
+                <button type="submit" name="export" value="1" class="btn btn-success"><i class="bi bi-file-earmark-excel"></i> Экспорт в Excel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if data %}
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-striped table-hover mb-0 align-middle">
+                <thead class="table-dark">
+                    <tr class="text-center">
+                        {% for col in columns %}
+                            <th>{{ column_labels|get_item:col }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in data %}
+                    <tr class="text-center align-middle">
+                        {% for col in columns %}
+                            <td>{{ row|get_item:col }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% elif request.GET %}
+    <div class="alert alert-info">По заданным критериям заявки не найдены.</div>
+{% else %}
+    <div class="alert alert-secondary">Выберите колонки и фильтры, затем нажмите "Сформировать".</div>
+{% endif %}
+{% endblock %}

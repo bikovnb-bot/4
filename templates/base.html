@@ -105,6 +105,19 @@
                             <li><a class="dropdown-item" href="{% url 'energy:export_readings' %}">Экспорт истории</a></li>
                         </ul>
                     </li>
+                    <!-- Заявки (выпадающее меню) -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="requestsDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-clipboard"></i> Заявки
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'requests_app:request_list' %}">Список заявок</a></li>
+                            <li><a class="dropdown-item" href="{% url 'requests_app:request_create' %}">Новая заявка</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'requests_app:material_stock' %}">Материалы на складе</a></li>
+                            <li><a class="dropdown-item" href="{% url 'requests_app:custom_report' %}">Настраиваемый отчёт</a></li>
+                        </ul>
+                    </li>
                     <!-- Администрирование (выпадающее меню, только для определённых ролей) -->
                     {% if is_admin or user.is_staff %}
                     <li class="nav-item dropdown">

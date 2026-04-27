@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+{% load custom_filters %}
+
+{% block title %}Заявки на эксплуатацию{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>📋 Заявки на эксплуатацию</h2>
+    <a href="{% url 'requests_app:request_create' %}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> Создать заявку
+    </a>
+</div>
+
+<!-- Фильтры -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold">Статус</label>
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">Все</option>
+                    {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold">Приоритет</label>
+                <select name="priority" class="form-select form-select-sm">
+                    <option value="">Все</option>
+                    {% for value, label in priority_choices %}
+                        <option value="{{ value }}" {% if request.GET.priority == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold">Здание</label>
+                <select name="building" class="form-select form-select-sm">
+                    <option value="">Все</option>
+                    {% for b in buildings %}
+                        <option value="{{ b.id }}" {% if request.GET.building|stringformat:"s" == b.id|stringformat:"s" %}selected{% endif %}>{{ b }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary btn-sm me-2">Применить</button>
+                <a href="{% url 'requests_app:request_list' %}" class="btn btn-secondary btn-sm">Сбросить</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Таблица заявок -->
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-striped table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr class="text-center">
+                        <th style="width: 8%">№</th>
+                        <th>Здание</th>
+                        <th>Помещение</th>
+                        <th>Тип</th>
+                        <th style="width: 12%">Приоритет</th>
+                        <th style="width: 12%">Статус</th>
+                        <th>Создатель</th>
+                        <th>Ответственный</th>
+                        <th>Создана</th>
+                        <th style="width: 10%">Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for req in requests %}
+                        <tr class="text-center align-middle">
+                            <td><strong>{{ req.request_number }}</strong></td>
+                            <td>{{ req.building }}</td>
+                            <td>{{ req.room_number }}</td>
+                            <td>
+                                {% if req.request_type.icon %}
+                                    <span class="badge bg-light text-dark">{{ req.request_type.icon }}</span>
+                                {% endif %}
+                                {{ req.request_type.name }}
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if req.priority == 'high' %}danger{% elif req.priority == 'medium' %}warning{% else %}secondary{% endif %}">
+                                    {{ req.get_priority_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if req.status == 'new' %}info{% elif req.status == 'in_progress' %}primary{% elif req.status == 'completed' %}success{% else %}secondary{% endif %}">
+                                    {{ req.get_status_display }}
+                                </span>
+                            </td>
+                            <td>{{ req.created_by.get_full_name|default:req.created_by.username }}</td>
+                            <td>
+                                {% if req.assigned_to %}
+                                    {{ req.assigned_to.get_full_name|default:req.assigned_to.username }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>{{ req.created_at|date:"d.m.Y" }}</td>
+                            <td>
+                                <a href="{% url 'requests_app:request_detail' req.pk %}" class="btn btn-sm btn-outline-info" title="Просмотр">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                {% if can_edit %}
+                                    <a href="{% url 'requests_app:request_edit' req.pk %}" class="btn btn-sm btn-outline-secondary" title="Редактировать">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <a href="{% url 'requests_app:request_delete' req.pk %}" class="btn btn-sm btn-outline-danger" title="Удалить">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center text-muted py-4">Нет заявок, соответствующих фильтрам</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Пагинация -->
+{% include 'pagination.html' with page_obj=page_obj %}
+{% endblock %}

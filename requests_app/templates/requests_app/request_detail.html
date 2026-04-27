@@ -1,0 +1,174 @@
+{% extends 'base.html' %}
+{% load custom_filters %}
+
+{% block title %}Заявка {{ request_obj.request_number }}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Назад
+    </a>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4>📋 Заявка № {{ request_obj.request_number }}</h4>
+    <div>
+        {% if can_edit %}
+            <a href="{% url 'requests_app:request_edit' request_obj.pk %}" class="btn btn-warning btn-sm me-2" title="Редактировать">
+                <i class="bi bi-pencil"></i> Редактировать
+            </a>
+        {% endif %}
+        {% if can_delete %}
+            <a href="{% url 'requests_app:request_delete' request_obj.pk %}" class="btn btn-danger btn-sm" title="Удалить">
+                <i class="bi bi-trash"></i> Удалить
+            </a>
+        {% endif %}
+        {% if request_obj.status != 'closed' and can_edit %}
+            <a href="{% url 'requests_app:request_close' request_obj.pk %}" class="btn btn-success btn-sm">
+                <i class="bi bi-check-circle"></i> Закрыть заявку
+            </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Основная информация -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light">
+        <strong><i class="bi bi-info-circle"></i> Информация о заявке</strong>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>Здание:</strong> {{ request_obj.building }}</p>
+                <p><strong>Номер помещения:</strong> {{ request_obj.room_number }}</p>
+                <p><strong>Тип заявки:</strong>
+                    {% if request_obj.request_type.icon %}
+                        <span class="badge bg-secondary">{{ request_obj.request_type.icon }}</span>
+                    {% endif %}
+                    {{ request_obj.request_type.name }}
+                </p>
+                <p><strong>Приоритет:</strong>
+                    <span class="badge bg-{% if request_obj.priority == 'high' %}danger{% elif request_obj.priority == 'medium' %}warning{% else %}secondary{% endif %}">
+                        {{ request_obj.get_priority_display }}
+                    </span>
+                </p>
+                <p><strong>Статус:</strong>
+                    <span class="badge bg-{% if request_obj.status == 'new' %}info{% elif request_obj.status == 'in_progress' %}primary{% elif request_obj.status == 'completed' %}success{% elif request_obj.status == 'closed' %}secondary{% else %}secondary{% endif %}">
+                        {{ request_obj.get_status_display }}
+                    </span>
+                </p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Создатель:</strong> {{ request_obj.created_by.get_full_name|default:request_obj.created_by.username }}</p>
+                <p><strong>Ответственный:</strong> 
+                    {% if request_obj.assigned_to %}
+                        {{ request_obj.assigned_to.get_full_name|default:request_obj.assigned_to.username }}
+                    {% else %}
+                        <span class="text-muted">не назначен</span>
+                    {% endif %}
+                </p>
+                <p><strong>Плановая дата выполнения:</strong> {{ request_obj.planned_date|date:"d.m.Y"|default:"—" }}</p>
+                <p><strong>Дата закрытия:</strong> {{ request_obj.completed_date|date:"d.m.Y H:i"|default:"—" }}</p>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-12">
+                <p><strong>Описание:</strong></p>
+                <p class="border rounded p-2 bg-light">{{ request_obj.description|linebreaks }}</p>
+            </div>
+        </div>
+        {% if request_obj.comment %}
+        <div class="row mt-3">
+            <div class="col-12">
+                <p><strong>Комментарий:</strong></p>
+                <p class="border rounded p-2 bg-light">{{ request_obj.comment|linebreaks }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Файлы -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light">
+        <strong><i class="bi bi-files"></i> Прикреплённые файлы</strong>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Файл</th>
+                        <th>Дата загрузки</th>
+                        {% if can_edit %}<th>Действия</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for file in request_obj.files.all %}
+                    <tr>
+                        <td><a href="{{ file.file.url }}" target="_blank">{{ file.get_file_name }}</a></td>
+                        <td>{{ file.uploaded_at|date:"d.m.Y H:i" }}</td>
+                        {% if can_edit %}
+                        <td>
+                            <a href="{% url 'requests_app:delete_request_file' file.pk %}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Удалить файл?')">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3" class="text-center text-muted">Нет прикреплённых файлов</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Использованные материалы (если есть) -->
+{% if request_obj.used_materials.all %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light">
+        <strong><i class="bi bi-box"></i> Использованные материалы</strong>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Наименование</th>
+                        <th>Количество</th>
+                        <th>Ед. изм.</th>
+                        <th>Цена за ед.</th>
+                        <th>Сумма</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for mat in request_obj.used_materials.all %}
+                    <tr>
+                        <td>{{ mat.name }}</td>
+                        <td>{{ mat.quantity }}</td>
+                        <td>{{ mat.unit }}</td>
+                        <td>{{ mat.price_per_unit }} ₽</td>
+                        <td>{{ mat.total_price }} ₽</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="fw-bold">
+                        <th colspan="4">Итого</th>
+                        <th>{{ request_obj.used_materials.all|sum_total_price|default:"0" }} ₽</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="mt-3">
+    <a href="{% url 'requests_app:request_list' %}" class="btn btn-secondary">← Вернуться к списку</a>
+</div>
+{% endblock %}

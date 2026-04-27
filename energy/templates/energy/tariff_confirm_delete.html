@@ -1,0 +1,28 @@
+{% extends "energy/base.html" %}
+{% block title %}Удаление тарифа{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <i class="bi bi-exclamation-triangle"></i> Подтверждение удаления
+            </div>
+            <div class="card-body">
+                <p>Вы уверены, что хотите удалить тариф <strong>"{{ tariff.name }}"</strong> для счётчика <strong>{{ tariff.meter }}</strong>?</p>
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex justify-content-between">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-trash"></i> Удалить
+                        </button>
+                        <a href="{% url 'energy:tariff_list' %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Отмена
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
