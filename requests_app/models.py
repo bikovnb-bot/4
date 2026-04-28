@@ -45,6 +45,10 @@ class ServiceRequest(models.Model):
     comment = models.TextField(blank=True, verbose_name="Комментарий")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создана")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлена")
+    
+    # Новые поля для учёта времени выполнения
+    track_time = models.BooleanField(default=False, verbose_name="Учитывать время выполнения")
+    time_spent = models.PositiveIntegerField(null=True, blank=True, verbose_name="Затраченное время (минуты)")
 
     class Meta:
         ordering = ['-created_at']

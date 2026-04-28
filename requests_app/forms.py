@@ -21,11 +21,24 @@ class ServiceRequestForm(forms.ModelForm):
 
     class Meta:
         model = ServiceRequest
-        fields = ['building', 'room_number', 'request_type', 'description', 'priority', 'assigned_to', 'planned_date', 'comment', 'status']
+        fields = [
+            'building', 'room_number', 'request_type', 'description',
+            'priority', 'assigned_to', 'planned_date', 'comment', 'status',
+            'track_time', 'time_spent'
+        ]
         widgets = {
             'description': forms.Textarea(attrs={'rows': 4, 'class': 'form-control'}),
             'planned_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             'room_number': forms.TextInput(attrs={'class': 'form-control'}),
+            'track_time': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'time_spent': forms.NumberInput(attrs={'class': 'form-control', 'step': '1', 'min': '0'}),
+        }
+        labels = {
+            'track_time': 'Учитывать время выполнения',
+            'time_spent': 'Затраченное время (минуты)',
+        }
+        help_texts = {
+            'time_spent': 'Укажите время в минутах, например: 30, 120.',
         }
 
     def __init__(self, user, *args, **kwargs):
@@ -36,6 +49,14 @@ class ServiceRequestForm(forms.ModelForm):
             self.fields['assigned_to'].queryset = User.objects.filter(is_active=True)
 
         self.fields['request_type'].queryset = RequestType.objects.filter(is_active=True)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        track_time = cleaned_data.get('track_time')
+        time_spent = cleaned_data.get('time_spent')
+        if track_time and not time_spent:
+            self.add_error('time_spent', 'Поле обязательно, если учёт времени включён.')
+        return cleaned_data
 
 
 class RequestFileForm(forms.ModelForm):

@@ -57,6 +57,9 @@
                         {{ request_obj.get_status_display }}
                     </span>
                 </p>
+                {% if request_obj.track_time and request_obj.time_spent %}
+                    <p><strong>Затраченное время:</strong> {{ request_obj.time_spent }} мин.</p>
+                {% endif %}
             </div>
             <div class="col-md-6">
                 <p><strong>Создатель:</strong> {{ request_obj.created_by.get_full_name|default:request_obj.created_by.username }}</p>
@@ -149,8 +152,8 @@
                     {% for mat in request_obj.used_materials.all %}
                     <tr>
                         <td>{{ mat.name }}</td>
-                        <td>{{ mat.quantity }}</td>
-                        <td>{{ mat.unit }}</td>
+                        <td>{{ mat.quantity }} </td>
+                        <td>{{ mat.unit }} </td>
                         <td>{{ mat.price_per_unit }} ₽</td>
                         <td>{{ mat.total_price }} ₽</td>
                     </tr>

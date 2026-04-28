@@ -16,4 +16,5 @@ urlpatterns = [
     path('report/', views.custom_report, name='custom_report'),
     path('import-materials/', views.import_materials_from_excel, name='import_materials'),
     path('download-template/', views.download_materials_template, name='download_materials_template'),
+    path('dashboard/', views.dashboard, name='dashboard'),
 ]

@@ -14,6 +14,8 @@ from django.http import HttpResponse
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill
 from django.db.models import Q
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 
 from .models import ServiceRequest, RequestFile, UsedMaterial, Material
 from .forms import ServiceRequestForm, RequestFileForm, ReportForm, ImportMaterialsForm
@@ -490,3 +492,79 @@ def download_materials_template(request):
     response['Content-Disposition'] = 'attachment; filename="materials_template.xlsx"'
     wb.save(response)
     return response
+
+
+# ------------------------------------------------------------
+# Дашборд заявок (исправленный)
+# ------------------------------------------------------------
+@login_required
+@viewer_required
+def dashboard(request):
+    user = request.user
+
+    total_requests = ServiceRequest.objects.count()
+    if not can_view_all_requests(user):
+        total_requests = ServiceRequest.objects.filter(created_by=user).count()
+
+    # Статусы
+    status_stats = {}
+    for status_code, status_name in ServiceRequest.STATUS_CHOICES:
+        qs = ServiceRequest.objects.filter(status=status_code)
+        if not can_view_all_requests(user):
+            qs = qs.filter(created_by=user)
+        status_stats[status_name] = qs.count()
+    status_labels = list(status_stats.keys())
+    status_data = list(status_stats.values())
+
+    # Приоритеты
+    priority_stats = {}
+    for prior_code, prior_name in ServiceRequest.PRIORITY_CHOICES:
+        qs = ServiceRequest.objects.filter(priority=prior_code)
+        if not can_view_all_requests(user):
+            qs = qs.filter(created_by=user)
+        priority_stats[prior_name] = qs.count()
+    priority_labels = list(priority_stats.keys())
+    priority_data = list(priority_stats.values())
+
+    # Динамика за 30 дней
+    end_date = datetime.now().date()
+    start_date = end_date - timedelta(days=30)
+    qs_last30 = ServiceRequest.objects.filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
+    if not can_view_all_requests(user):
+        qs_last30 = qs_last30.filter(created_by=user)
+
+    daily_stats = {}
+    for req in qs_last30:
+        day = req.created_at.date().isoformat()
+        daily_stats[day] = daily_stats.get(day, 0) + 1
+    days = sorted(daily_stats.keys())
+    daily_counts = [daily_stats[day] for day in days]
+
+    # Динамика по месяцам (6 месяцев)
+    months = []
+    month_counts = []
+    today = datetime.now().date()
+    for i in range(6):
+        month_date = today - relativedelta(months=i)
+        month_start = month_date.replace(day=1)
+        month_end = (month_start + relativedelta(months=1)) - timedelta(days=1)
+        qs_month = ServiceRequest.objects.filter(created_at__date__gte=month_start, created_at__date__lte=month_end)
+        if not can_view_all_requests(user):
+            qs_month = qs_month.filter(created_by=user)
+        months.append(month_start.strftime('%B %Y'))
+        month_counts.append(qs_month.count())
+    months.reverse()
+    month_counts.reverse()
+
+    context = {
+        'total_requests': total_requests,
+        'status_labels': status_labels,
+        'status_data': status_data,
+        'priority_labels': priority_labels,
+        'priority_data': priority_data,
+        'days': days,
+        'daily_counts': daily_counts,
+        'months': months,
+        'month_counts': month_counts,
+    }
+    return render(request, 'requests_app/dashboard.html', context)

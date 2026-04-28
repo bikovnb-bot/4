@@ -58,24 +58,30 @@
                 <thead class="table-light">
                     <tr class="text-center">
                         <th style="width: 8%">№</th>
-                        <th>Здание</th>
-                        <th>Помещение</th>
-                        <th>Тип</th>
-                        <th style="width: 12%">Приоритет</th>
-                        <th style="width: 12%">Статус</th>
-                        <th>Создатель</th>
-                        <th>Ответственный</th>
-                        <th>Создана</th>
+                        <th style="width: 15%">Здание</th>
+                        <th style="width: 8%">Помещ.</th>
+                        <th style="width: 15%">Тип</th>
+                        <th style="width: 10%">Приоритет</th>
+                        <th style="width: 10%">Статус</th>
+                        <th style="width: 12%">Создатель</th>
+                        <th style="width: 12%">Ответственный</th>
+                        <th style="width: 10%">Создана</th>
                         <th style="width: 10%">Действия</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for req in requests %}
                         <tr class="text-center align-middle">
-                            <td><strong>{{ req.request_number }}</strong></td>
-                            <td>{{ req.building }}</td>
-                            <td>{{ req.room_number }}</td>
                             <td>
+                                <strong>{{ req.request_number }}</strong>
+                                <i class="bi bi-info-circle text-secondary ms-1" 
+                                   data-bs-toggle="tooltip" 
+                                   data-bs-placement="top" 
+                                   title="{{ req.description|escape }}"></i>
+                            </td>
+                            <td class="text-start">{{ req.building }}</td>
+                            <td>{{ req.room_number }}</td>
+                            <td class="text-start">
                                 {% if req.request_type.icon %}
                                     <span class="badge bg-light text-dark">{{ req.request_type.icon }}</span>
                                 {% endif %}
@@ -87,14 +93,14 @@
                                 </span>
                             </td>
                             <td>
-                                <span class="badge bg-{% if req.status == 'new' %}info{% elif req.status == 'in_progress' %}primary{% elif req.status == 'completed' %}success{% else %}secondary{% endif %}">
+                                <span class="badge bg-{% if req.status == 'new' %}info{% elif req.status == 'in_progress' %}primary{% elif req.status == 'completed' %}success{% elif req.status == 'closed' %}secondary{% else %}secondary{% endif %}">
                                     {{ req.get_status_display }}
                                 </span>
                             </td>
-                            <td>{{ req.created_by.get_full_name|default:req.created_by.username }}</td>
+                            <td>{{ req.created_by.get_full_name|default:req.created_by.username|truncatechars:20 }}</td>
                             <td>
                                 {% if req.assigned_to %}
-                                    {{ req.assigned_to.get_full_name|default:req.assigned_to.username }}
+                                    {{ req.assigned_to.get_full_name|default:req.assigned_to.username|truncatechars:20 }}
                                 {% else %}
                                     —
                                 {% endif %}
@@ -127,4 +133,15 @@
 
 <!-- Пагинация -->
 {% include 'pagination.html' with page_obj=page_obj %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+</script>
 {% endblock %}

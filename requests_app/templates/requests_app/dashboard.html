@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+{% load custom_filters %}
+
+{% block title %}Дашборд заявок{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Назад
+    </a>
+</div>
+
+<h2>📊 Дашборд заявок</h2>
+
+<!-- Карточки с общей статистикой -->
+<div class="row mb-4">
+    <div class="col-md-4 mx-auto">
+        <div class="card bg-primary bg-opacity-10 text-center">
+            <div class="card-body">
+                <i class="bi bi-files fs-1 text-primary"></i>
+                <h3 class="mt-2">{{ total_requests }}</h3>
+                <p class="mb-0">Всего заявок</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <!-- Статусы -->
+    <div class="col-md-6 mb-3">
+        <div class="card h-100 shadow-sm">
+            <div class="card-header bg-light">
+                <strong><i class="bi bi-pie-chart"></i> Статусы заявок</strong>
+            </div>
+            <div class="card-body">
+                <canvas id="statusChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <!-- Приоритеты -->
+    <div class="col-md-6 mb-3">
+        <div class="card h-100 shadow-sm">
+            <div class="card-header bg-light">
+                <strong><i class="bi bi-bar-chart-steps"></i> Приоритеты заявок</strong>
+            </div>
+            <div class="card-body">
+                <canvas id="priorityChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6 mb-3">
+        <div class="card h-100 shadow-sm">
+            <div class="card-header bg-light">
+                <strong><i class="bi bi-graph-up"></i> Динамика за последние 30 дней</strong>
+            </div>
+            <div class="card-body">
+                <canvas id="dailyChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-3">
+        <div class="card h-100 shadow-sm">
+            <div class="card-header bg-light">
+                <strong><i class="bi bi-calendar-month"></i> Динамика по месяцам (6 мес.)</strong>
+            </div>
+            <div class="card-body">
+                <canvas id="monthlyChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Статусы
+        const statusLabels = {{ status_labels|safe }};
+        const statusData = {{ status_data|safe }};
+        if (statusLabels.length) {
+            new Chart(document.getElementById('statusChart'), {
+                type: 'pie',
+                data: {
+                    labels: statusLabels,
+                    datasets: [{
+                        data: statusData,
+                        backgroundColor: ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6c757d']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: true }
+            });
+        }
+
+        // Приоритеты
+        const priorityLabels = {{ priority_labels|safe }};
+        const priorityData = {{ priority_data|safe }};
+        new Chart(document.getElementById('priorityChart'), {
+            type: 'bar',
+            data: {
+                labels: priorityLabels,
+                datasets: [{
+                    label: 'Количество заявок',
+                    data: priorityData,
+                    backgroundColor: '#198754'
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: true }
+        });
+
+        // Дневная динамика
+        const days = {{ days|safe }};
+        const dailyCounts = {{ daily_counts|safe }};
+        new Chart(document.getElementById('dailyChart'), {
+            type: 'line',
+            data: {
+                labels: days,
+                datasets: [{
+                    label: 'Заявок в день',
+                    data: dailyCounts,
+                    borderColor: '#0d6efd',
+                    fill: false
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: true }
+        });
+
+        // Месячная динамика
+        const months = {{ months|safe }};
+        const monthCounts = {{ month_counts|safe }};
+        new Chart(document.getElementById('monthlyChart'), {
+            type: 'line',
+            data: {
+                labels: months,
+                datasets: [{
+                    label: 'Заявок в месяц',
+                    data: monthCounts,
+                    borderColor: '#dc3545',
+                    fill: false
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: true }
+        });
+    });
+</script>
+{% endblock %}

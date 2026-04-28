@@ -155,7 +155,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="text-center text-muted">Нет показаний<\/td>
+                        <td colspan="5" class="text-center text-muted">Нет показаний</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -189,19 +189,19 @@
                     {% for doc in meter.documents.all %}
                     <tr>
                         <td><a href="{{ doc.file.url }}" target="_blank">{{ doc.get_file_name }}</a></td>
-                        <td>{{ doc.description|default:"—" }}<\/td>
-                        <td>{{ doc.uploaded_at|date:"d.m.Y H:i" }}<\/td>
+                        <td>{{ doc.description|default:"—" }}</td>
+                        <td>{{ doc.uploaded_at|date:"d.m.Y H:i" }}</td>
                         {% if can_edit %}
                         <td>
                             <a href="{% url 'energy:delete_document' doc.pk %}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Удалить документ?')">
                                 <i class="bi bi-trash"></i>
                             </a>
-                        <\/td>
+                        </td>
                         {% endif %}
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="4" class="text-center text-muted">Нет загруженных документов<\/td>
+                        <td colspan="4" class="text-center text-muted">Нет загруженных документов</td>
                     </tr>
                     {% endfor %}
                 </tbody>

@@ -89,7 +89,7 @@
                     {% endfor %}
                 </div>
 
-                <!-- Третья колонка: описание и файлы -->
+                <!-- Третья колонка: описание, файлы, учёт времени -->
                 <div class="col-md-4">
                     <div class="mb-3">
                         <label for="{{ form.description.id_for_label }}" class="form-label small fw-semibold">
@@ -102,6 +102,26 @@
                         <label class="form-label small fw-semibold"><i class="bi bi-paperclip"></i> Файлы (можно несколько)</label>
                         <input type="file" name="files" multiple class="form-control" id="fileInput">
                         <div id="filePreview" class="mt-2 small text-muted"></div>
+                    </div>
+
+                    <!-- Учёт времени выполнения -->
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.track_time }}
+                            <label class="form-check-label" for="{{ form.track_time.id_for_label }}">
+                                <i class="bi bi-stopwatch"></i> {{ form.track_time.label }}
+                            </label>
+                        </div>
+                    </div>
+                    <div id="time-spent-group" style="display: none;">
+                        <div class="mb-3">
+                            <label for="{{ form.time_spent.id_for_label }}" class="form-label small fw-semibold">
+                                <i class="bi bi-hourglass-split"></i> {{ form.time_spent.label }}
+                            </label>
+                            {{ form.time_spent }}
+                            {% if form.time_spent.help_text %}<div class="form-text small">{{ form.time_spent.help_text }}</div>{% endif %}
+                            {% if form.time_spent.errors %}<div class="text-danger small">{{ form.time_spent.errors }}</div>{% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -127,6 +147,21 @@
                 filePreview.innerHTML = '';
             }
         });
+    }
+
+    // Динамическое отображение поля времени при активации чекбокса
+    const trackCheckbox = document.getElementById('{{ form.track_time.id_for_label }}');
+    const timeGroup = document.getElementById('time-spent-group');
+    function toggleTime() {
+        if (trackCheckbox && trackCheckbox.checked) {
+            timeGroup.style.display = 'block';
+        } else {
+            timeGroup.style.display = 'none';
+        }
+    }
+    if (trackCheckbox) {
+        trackCheckbox.addEventListener('change', toggleTime);
+        toggleTime();
     }
 </script>
 {% endblock %}
