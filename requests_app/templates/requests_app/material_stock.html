@@ -7,6 +7,11 @@
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <h2>📦 Материалы на складе</h2>
     <div>
+        {% if user_role in 'ADMIN,MANAGER,DISPATCHER' %}
+            <a href="{% url 'requests_app:material_add' %}" class="btn btn-sm btn-warning">
+                <i class="bi bi-plus-circle"></i> Добавить материал
+            </a>
+        {% endif %}
         <a href="{% url 'requests_app:import_materials' %}" class="btn btn-sm btn-primary">
             <i class="bi bi-upload"></i> Импорт из Excel
         </a>
@@ -44,6 +49,9 @@
                         <th>Ед. изм.</th>
                         <th>Цена за ед. (₽)</th>
                         <th>Остаток</th>
+                        {% if user_role in 'ADMIN,MANAGER,DISPATCHER' %}
+                            <th>Действия</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -54,10 +62,19 @@
                         <td>{{ material.unit }}</td>
                         <td>{{ material.default_price|space_thousands }}</td>
                         <td><strong>{{ material.quantity_in_stock|floatformat:2 }}</strong> {{ material.unit }}</td>
+                        {% if user_role in 'ADMIN,MANAGER,DISPATCHER' %}
+                            <td>
+                                <a href="{% url 'requests_app:material_edit' material.id %}" class="btn btn-sm btn-outline-primary" title="Редактировать">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                            </td>
+                        {% endif %}
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="text-center text-muted py-4">Материалы не найдены</td>
+                        <td colspan="{% if user_role in 'ADMIN,MANAGER,DISPATCHER' %}6{% else %}5{% endif %}" class="text-center text-muted py-4">
+                            Материалы не найдены
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

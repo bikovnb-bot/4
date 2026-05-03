@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
 from buildings.models import Building
 
 
@@ -29,6 +30,7 @@ class ServiceRequest(models.Model):
         ('in_progress', 'В работе'),
         ('completed', 'Выполнена'),
         ('closed', 'Закрыта'),
+        ('suspended', 'Приостановлена'),
     ]
 
     request_number = models.CharField(max_length=20, unique=True, editable=False, verbose_name="Номер заявки")
@@ -43,12 +45,11 @@ class ServiceRequest(models.Model):
     planned_date = models.DateField(null=True, blank=True, verbose_name="Плановая дата выполнения")
     completed_date = models.DateTimeField(null=True, blank=True, verbose_name="Дата выполнения")
     comment = models.TextField(blank=True, verbose_name="Комментарий")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создана")
+    created_at = models.DateTimeField(default=timezone.now, verbose_name="Создана")   # изменено
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлена")
-    
-    # Новые поля для учёта времени выполнения
     track_time = models.BooleanField(default=False, verbose_name="Учитывать время выполнения")
     time_spent = models.PositiveIntegerField(null=True, blank=True, verbose_name="Затраченное время (минуты)")
+    suspension_reason = models.TextField(blank=True, null=True, verbose_name="Причина приостановки")
 
     class Meta:
         ordering = ['-created_at']
@@ -64,6 +65,7 @@ class ServiceRequest(models.Model):
 
     def return_materials_to_stock(self):
         """Возвращает на склад все материалы, использованные в заявке, и удаляет записи UsedMaterial."""
+        from .models import Material
         for used in self.used_materials.all():
             material = Material.objects.filter(name=used.name).first()
             if material:
@@ -78,10 +80,14 @@ class ServiceRequest(models.Model):
 class RequestFile(models.Model):
     request = models.ForeignKey(ServiceRequest, on_delete=models.CASCADE, related_name='files', verbose_name="Заявка")
     file = models.FileField(upload_to='request_files/%Y/%m/%d/', verbose_name="Файл")
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Кто загрузил")
     uploaded_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата загрузки")
 
     def get_file_name(self):
         return self.file.name.split('/')[-1]
+
+    def __str__(self):
+        return self.get_file_name()
 
 
 class Material(models.Model):
@@ -112,3 +118,16 @@ class UsedMaterial(models.Model):
 
     def __str__(self):
         return f"{self.name} – {self.quantity} {self.unit}"
+    
+class UsedMaterial(models.Model):
+    request = models.ForeignKey(ServiceRequest, on_delete=models.CASCADE, related_name='used_materials')
+    material = models.ForeignKey(Material, on_delete=models.CASCADE, verbose_name="Материал")
+    name = models.CharField(max_length=200, verbose_name="Наименование")  # историческое значение
+    quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    unit = models.CharField(max_length=20)
+    price_per_unit = models.DecimalField(max_digits=10, decimal_places=2)
+    total_price = models.DecimalField(max_digits=12, decimal_places=2, editable=False, blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        self.total_price = self.quantity * self.price_per_unit
+        super().save(*args, **kwargs)

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Отметить выполненной{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Заявка №{{ req.request_number }}</h2>
+    <p>Подтвердить выполнение? (материалы будут добавлены при закрытии)</p>
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success">Да, выполнено</button>
+        <a href="{% url 'requests_app:request_detail' req.pk %}" class="btn btn-secondary">Отмена</a>
+    </form>
+</div>
+{% endblock %}

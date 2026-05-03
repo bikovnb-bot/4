@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% load custom_filters %}
+
+{% block title %}Выполнение заявки {{ req.request_number }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="mb-3">
+        <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Назад
+        </a>
+    </div>
+
+    <h2>🔧 Выполнение заявки № {{ req.request_number }}</h2>
+    <div class="card mb-4">
+        <div class="card-body">
+            <p><strong>Исполнитель:</strong> {{ req.assigned_to.get_full_name|default:req.assigned_to.username }}</p>
+            <p><strong>Здание:</strong> {{ req.building.name|default:req.building.address|default:"—" }}</p>
+            <p><strong>Помещение:</strong> {{ req.room_number|default:"—" }}</p>
+            <p><strong>Описание:</strong> {{ req.description|linebreaksbr }}</p>
+        </div>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-box me-2"></i>Использованные материалы</h5>
+            </div>
+            <div class="card-body">
+                {{ formset.management_form }}
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered align-middle">
+                        <thead class="table-secondary">
+                            <tr>
+                                <th>Наименование</th>
+                                <th>Количество</th>
+                                <th>Ед. изм.</th>
+                                <th>Цена за ед. (₽)</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="materials-tbody">
+                            {% for form in formset %}
+                                <tr class="material-row">
+                                    <td>{{ form.name }}{{ form.id }}</td>
+                                    <td>{{ form.quantity }}</td>
+                                    <td>{{ form.unit }}</td>
+                                    <td>{{ form.price_per_unit }}</td>
+                                    <td>{% if form.instance.pk %}{{ form.DELETE }}{% endif %}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label for="time_spent" class="form-label">Затраченное время (минуты)</label>
+            <input type="number" name="time_spent" id="time_spent" class="form-control" step="1" min="0">
+        </div>
+
+        <div class="mb-3">
+            <label for="comment" class="form-label">Комментарий исполнителя</label>
+            <textarea name="comment" id="comment" class="form-control" rows="3"></textarea>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-success">
+                <i class="bi bi-check-circle"></i> Завершить и отправить на проверку
+            </button>
+            <a href="{% url 'requests_app:request_detail' req.pk %}" class="btn btn-secondary">
+                Отмена
+            </a>
+        </div>
+    </form>
+</div>
+
+<script>
+    // Добавление новой строки материалов (если formset позволяет)
+    let formIdx = {{ formset.total_form_count }};
+    const addButton = document.createElement('button');
+    addButton.type = 'button';
+    addButton.className = 'btn btn-sm btn-outline-primary mt-2';
+    addButton.innerHTML = '<i class="bi bi-plus"></i> Добавить материал';
+    document.querySelector('.card-body').appendChild(addButton);
+    addButton.addEventListener('click', function() {
+        const emptyForm = `{% filter escapejs %}{{ formset.empty_form }}{% endfilter %}`.replace(/__prefix__/g, formIdx);
+        const tbody = document.getElementById('materials-tbody');
+        const tr = document.createElement('tr');
+        tr.innerHTML = emptyForm;
+        tbody.appendChild(tr);
+        formIdx++;
+        document.getElementById('id_used_materials-TOTAL_FORMS').value = formIdx;
+    });
+</script>
+{% endblock %}

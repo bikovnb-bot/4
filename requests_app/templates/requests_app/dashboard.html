@@ -10,64 +10,63 @@
     </a>
 </div>
 
-<h2>📊 Дашборд заявок</h2>
+<h2 class="h5 mb-2">📊 Дашборд заявок</h2>
 
-<!-- Карточки с общей статистикой -->
-<div class="row mb-4">
-    <div class="col-md-4 mx-auto">
+<div class="row mb-2">
+    <div class="col-md-3 mx-auto">
         <div class="card bg-primary bg-opacity-10 text-center">
-            <div class="card-body">
-                <i class="bi bi-files fs-1 text-primary"></i>
-                <h3 class="mt-2">{{ total_requests }}</h3>
-                <p class="mb-0">Всего заявок</p>
+            <div class="card-body py-1">
+                <i class="bi bi-files fs-6 text-primary"></i>
+                <span class="fs-5 fw-bold ms-1">{{ total_requests }}</span>
+                <span class="small text-muted ms-1">заявок</span>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row mb-4">
-    <!-- Статусы -->
-    <div class="col-md-6 mb-3">
+<div class="row g-1 mb-2">
+    <!-- Статусы (гистограмма, цвета разные) -->
+    <div class="col-md-6">
         <div class="card h-100 shadow-sm">
-            <div class="card-header bg-light">
-                <strong><i class="bi bi-pie-chart"></i> Статусы заявок</strong>
+            <div class="card-header bg-light py-1 px-2">
+                <strong class="small"><i class="bi bi-bar-chart-steps"></i> Статусы заявок</strong>
             </div>
-            <div class="card-body">
-                <canvas id="statusChart" height="200"></canvas>
+            <div class="card-body py-1">
+                <canvas id="statusChart" height="120"></canvas>
             </div>
         </div>
     </div>
-    <!-- Приоритеты -->
-    <div class="col-md-6 mb-3">
+    <!-- Приоритеты (гистограмма, цвета разные) -->
+    <div class="col-md-6">
         <div class="card h-100 shadow-sm">
-            <div class="card-header bg-light">
-                <strong><i class="bi bi-bar-chart-steps"></i> Приоритеты заявок</strong>
+            <div class="card-header bg-light py-1 px-2">
+                <strong class="small"><i class="bi bi-bar-chart-steps"></i> Приоритеты заявок</strong>
             </div>
-            <div class="card-body">
-                <canvas id="priorityChart" height="200"></canvas>
+            <div class="card-body py-1">
+                <canvas id="priorityChart" height="120"></canvas>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row mb-4">
-    <div class="col-md-6 mb-3">
+<div class="row g-1">
+    <div class="col-md-6">
         <div class="card h-100 shadow-sm">
-            <div class="card-header bg-light">
-                <strong><i class="bi bi-graph-up"></i> Динамика за последние 30 дней</strong>
+            <div class="card-header bg-light py-1 px-2">
+                <strong class="small"><i class="bi bi-graph-up"></i> Динамика за 30 дней</strong>
             </div>
-            <div class="card-body">
-                <canvas id="dailyChart" height="200"></canvas>
+            <div class="card-body py-1">
+                <canvas id="dailyChart" height="110"></canvas>
             </div>
         </div>
     </div>
-    <div class="col-md-6 mb-3">
+    <div class="col-md-6">
         <div class="card h-100 shadow-sm">
-            <div class="card-header bg-light">
-                <strong><i class="bi bi-calendar-month"></i> Динамика по месяцам (6 мес.)</strong>
+            <div class="card-header bg-light py-1 px-2">
+                <strong class="small"><i class="bi bi-calendar-month"></i> Динамика по месяцам (6 мес.)</strong>
             </div>
-            <div class="card-body">
-                <canvas id="monthlyChart" height="200"></canvas>
+            <div class="card-body py-1">
+                <canvas id="monthlyChart" height="110"></canvas>
             </div>
         </div>
     </div>
@@ -75,37 +74,56 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Статусы
+        // Статусы - разные цвета для каждого столбца
         const statusLabels = {{ status_labels|safe }};
         const statusData = {{ status_data|safe }};
-        if (statusLabels.length) {
-            new Chart(document.getElementById('statusChart'), {
-                type: 'pie',
-                data: {
-                    labels: statusLabels,
-                    datasets: [{
-                        data: statusData,
-                        backgroundColor: ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6c757d']
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: true }
-            });
-        }
+        const statusColors = ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6c757d', '#fd7e14', '#20c997', '#d63384'];
+        new Chart(document.getElementById('statusChart'), {
+            type: 'bar',
+            data: {
+                labels: statusLabels,
+                datasets: [{
+                    label: 'Кол-во',
+                    data: statusData,
+                    backgroundColor: statusColors.slice(0, statusLabels.length),
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { display: false }, tooltip: { bodyFont: { size: 9 } } },
+                scales: {
+                    y: { ticks: { stepSize: 1, font: { size: 8 } }, grid: { display: false } },
+                    x: { ticks: { font: { size: 8 } } }
+                }
+            }
+        });
 
-        // Приоритеты
+        // Приоритеты - разные цвета
         const priorityLabels = {{ priority_labels|safe }};
         const priorityData = {{ priority_data|safe }};
+        const priorityColors = ['#fd7e14', '#ffc107', '#dc3545']; // высокий, средний, низкий
         new Chart(document.getElementById('priorityChart'), {
             type: 'bar',
             data: {
                 labels: priorityLabels,
                 datasets: [{
-                    label: 'Количество заявок',
+                    label: 'Кол-во',
                     data: priorityData,
-                    backgroundColor: '#198754'
+                    backgroundColor: priorityColors.slice(0, priorityLabels.length),
+                    borderRadius: 4
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: true }
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { display: false }, tooltip: { bodyFont: { size: 9 } } },
+                scales: {
+                    y: { ticks: { stepSize: 1, font: { size: 8 } }, grid: { display: false } },
+                    x: { ticks: { font: { size: 8 } } }
+                }
+            }
         });
 
         // Дневная динамика
@@ -116,13 +134,25 @@
             data: {
                 labels: days,
                 datasets: [{
-                    label: 'Заявок в день',
+                    label: 'Заявок',
                     data: dailyCounts,
                     borderColor: '#0d6efd',
-                    fill: false
+                    backgroundColor: 'rgba(13,110,253,0.05)',
+                    fill: true,
+                    tension: 0.2,
+                    pointRadius: 0,
+                    pointHoverRadius: 3
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: true }
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { display: false }, tooltip: { bodyFont: { size: 9 } } },
+                scales: {
+                    x: { ticks: { maxRotation: 45, minRotation: 45, font: { size: 7 } } },
+                    y: { ticks: { stepSize: 1, font: { size: 7 } }, grid: { color: '#e9ecef' } }
+                }
+            }
         });
 
         // Месячная динамика
@@ -133,13 +163,25 @@
             data: {
                 labels: months,
                 datasets: [{
-                    label: 'Заявок в месяц',
+                    label: 'Заявок',
                     data: monthCounts,
                     borderColor: '#dc3545',
-                    fill: false
+                    backgroundColor: 'rgba(220,53,69,0.05)',
+                    fill: true,
+                    tension: 0.2,
+                    pointRadius: 1,
+                    pointHoverRadius: 3
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: true }
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { display: false }, tooltip: { bodyFont: { size: 9 } } },
+                scales: {
+                    x: { ticks: { font: { size: 8 } } },
+                    y: { ticks: { stepSize: 1, font: { size: 7 } }, grid: { color: '#e9ecef' } }
+                }
+            }
         });
     });
 </script>

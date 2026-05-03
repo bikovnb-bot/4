@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Роли и права доступа{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>📖 Роли пользователей и их права</h2>
+    <p class="text-muted">Каждая роль определяет набор действий в различных приложениях системы.</p>
+
+    {% for role in roles_info %}
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header 
+            {% if role.code == 'ADMIN' %}bg-danger text-white
+            {% elif role.code == 'MANAGER' %}bg-primary text-white
+            {% elif role.code == 'VIEWER' %}bg-secondary text-white
+            {% elif role.code == 'CONTRACTOR' %}bg-success text-white
+            {% endif %}">
+            <h4 class="mb-0">{{ role.name }}</h4>
+        </div>
+        <div class="card-body">
+            <p>{{ role.description }}</p>
+            <h5>Права по приложениям:</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <strong>🏢 Договоры (эксплуатация)</strong>
+                    <ul>
+                        {% if role.code == 'ADMIN' %}
+                            <li>Полный CRUD договоров, оплат, дополнительных соглашений</li>
+                            <li>Импорт/экспорт Excel, управление шаблонами</li>
+                            <li>Просмотр любых договоров</li>
+                        {% elif role.code == 'MANAGER' %}
+                            <li>Создание, редактирование договоров (кроме удаления)</li>
+                            <li>Добавление и редактирование оплат, загрузка документов</li>
+                            <li>Просмотр всех договоров</li>
+                        {% elif role.code == 'VIEWER' %}
+                            <li>Только просмотр договоров, оплат, отчётов</li>
+                            <li>Экспорт в Excel (только чтение)</li>
+                        {% elif role.code == 'CONTRACTOR' %}
+                            <li>Доступ только к своим договорам (по полю «исполнитель»)</li>
+                            <li>Может добавлять оплаты и документы к своим договорам</li>
+                            <li>Просмотр только своих отчётов</li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <strong>⚡ Энергоучёт</strong>
+                    <ul>
+                        {% if role.code == 'ADMIN' or role.code == 'MANAGER' %}
+                            <li>Управление приборами учёта (CRUD)</li>
+                            <li>Импорт показаний, аномалии, графики</li>
+                            <li>Просмотр любых показаний</li>
+                        {% elif role.code == 'VIEWER' %}
+                            <li>Просмотр приборов и показаний, отчётов</li>
+                        {% elif role.code == 'CONTRACTOR' %}
+                            <li>Просмотр только своих приборов (если привязаны)</li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <div class="col-md-6 mt-2">
+                    <strong>📋 Заявки</strong>
+                    <ul>
+                        {% if role.code == 'ADMIN' or role.code == 'MANAGER' %}
+                            <li>Управление заявками (создание, назначение, закрытие)</li>
+                            <li>Управление справочниками (типы заявок, материалы)</li>
+                            <li>Просмотр всех заявок</li>
+                        {% elif role.code == 'VIEWER' %}
+                            <li>Просмотр всех заявок без возможности изменения</li>
+                        {% elif role.code == 'CONTRACTOR' %}
+                            <li>Может создавать заявки только для своих договоров</li>
+                            <li>Просмотр только своих заявок</li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <div class="col-md-6 mt-2">
+                    <strong>👥 Пользователи</strong>
+                    <ul>
+                        {% if role.code == 'ADMIN' %}
+                            <li>Управление пользователями, ролями, группами</li>
+                            <li>Смена паролей, активация/деактивация</li>
+                        {% elif role.code == 'MANAGER' %}
+                            <li>Просмотр списка пользователей (без редактирования)</li>
+                        {% else %}
+                            <li>Нет доступа</li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <div class="alert alert-secondary mt-3">
+        <strong>Примечание:</strong> Группы могут расширять права (например, давать доступ к определённым отчётам). Назначение групп происходит через редактирование пользователя.
+    </div>
+    <a href="javascript:history.back()" class="btn btn-outline-secondary">← Назад</a>
+</div>
+{% endblock %}

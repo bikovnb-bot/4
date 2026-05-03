@@ -1,138 +1,215 @@
 {% extends "base.html" %}
 {% load custom_filters %}
 
-{% block title %}Главная панель{% endblock %}
+{% block title %}Главная панель управления{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="jumbotron text-center bg-light rounded p-4 mb-3">
-        <h1 class="display-5">🏢 Система учёта эксплуатации зданий</h1>
-        <p class="lead">Управление договорами, отчётность и аналитика</p>
-    </div>
+<div class="container-fluid px-4 mt-4">
+    <style>
+        .card .fs-1 {
+            font-size: 1.75rem !important;
+        }
+        .card h2 {
+            font-size: 1.6rem !important;
+        }
+        .card h6 {
+            font-size: 0.7rem !important;
+            letter-spacing: 0.5px;
+        }
+        .small.text-muted {
+            font-size: 0.7rem !important;
+        }
+    </style>
 
-    <!-- Статистика по зданиям и договорам (ряд 1) -->
-    <div class="row mb-2">
-        <div class="col-md-4 mb-2">
-            <div class="card bg-primary bg-opacity-10 text-dark h-100 shadow-sm text-center">
-                <div class="card-body py-3">
-                    <i class="bi bi-building fs-2 text-primary"></i>
-                    <h3 class="mt-1 mb-0">{{ total_buildings }}</h3>
-                    <p class="mb-0 text-muted">Зданий</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4 mb-2">
-            <a href="{% url 'exploitation_app:contract_list' %}" class="text-decoration-none">
-                <div class="card bg-success bg-opacity-10 text-dark h-100 shadow-sm text-center">
-                    <div class="card-body py-3">
-                        <i class="bi bi-file-earmark-text fs-2 text-success"></i>
-                        <h3 class="mt-1 mb-0">{{ total_contracts }}</h3>
-                        <p class="mb-0 text-muted">Договоров</p>
-                        <small class="text-muted">из них действует: {{ active_contracts }}</small>
+    <!-- Первая строка – финансовые и договорные показатели -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted text-uppercase fw-semibold">Всего договоров</h6>
+                            <h2 class="mb-0">{{ total_contracts|default:0 }}</h2>
+                        </div>
+                        <i class="bi bi-file-earmark-text fs-1 text-primary opacity-75"></i>
+                    </div>
+                    <hr class="my-2">
+                    <div class="small text-muted">
+                        <span class="text-success">● {{ active_contracts|default:0 }} действуют</span>
+                        <span class="ms-2 text-secondary">● {{ expired_contracts|default:0 }} истекли</span>
                     </div>
                 </div>
-            </a>
+            </div>
         </div>
-        <div class="col-md-4 mb-2">
-            <a href="{% url 'exploitation_app:contract_report_advanced' %}" class="text-decoration-none">
-                <div class="card bg-warning bg-opacity-10 text-dark h-100 shadow-sm text-center">
-                    <div class="card-body py-3">
-                        <i class="bi bi-wallet2 fs-2 text-warning"></i>
-                        <h3 class="mt-1 mb-0">{{ total_amount|space_thousands }} ₽</h3>
-                        <p class="mb-0 text-muted">Общая сумма договоров</p>
-                        <small class="text-muted">Оплачено: {{ total_paid|space_thousands }} ₽</small>
+        <div class="col-md-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted text-uppercase fw-semibold">Общая сумма</h6>
+                            <h2 class="mb-0">{{ total_amount|thousands_comma }}</h2>
+                        </div>
+                        <i class="bi bi-calculator fs-1 text-success opacity-75"></i>
                     </div>
                 </div>
-            </a>
+            </div>
         </div>
-    </div>
-
-    <!-- Энергоучёт (ряд 2) с заменой карточки потребления на детализацию -->
-    <div class="row mb-2">
-        <div class="col-md-4 mb-2">
-            <div class="card bg-info bg-opacity-10 text-dark h-100 shadow-sm text-center">
-                <div class="card-body py-3">
-                    <i class="bi bi-speedometer2 fs-2 text-info"></i>
-                    <h3 class="mt-1 mb-0">{{ active_meters }}</h3>
-                    <p class="mb-0 text-muted">Активных приборов учёта</p>
-                    <a href="{% url 'energy:meter_list' %}" class="stretched-link text-dark"></a>
+        <div class="col-md-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted text-uppercase fw-semibold">Оплачено</h6>
+                            <h2 class="mb-0">{{ total_paid|thousands_comma }}</h2>
+                            <span class="small text-success">{{ payment_percent_display|default:0 }}%</span>
+                        </div>
+                        <i class="bi bi-credit-card fs-1 text-info opacity-75"></i>
+                    </div>
+                    <div class="progress mt-3" style="height: 8px;">
+                        <div class="progress-bar bg-success" style="width: {{ payment_percent|default:0 }}%;"></div>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-4 mb-2">
-            <div class="card bg-success bg-opacity-10 text-dark h-100 shadow-sm text-center">
-                <div class="card-body py-3">
-                    <i class="bi bi-table fs-2 text-success"></i>
-                    <h3 class="mt-1 mb-0">Детализация</h3>
-                    <p class="mb-0 text-muted">Потребление по типам</p>
-                    <a href="{% url 'energy:consumption_report' %}" class="stretched-link text-dark"></a>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4 mb-2">
-            <div class="card bg-danger bg-opacity-10 text-dark h-100 shadow-sm text-center">
-                <div class="card-body py-3">
-                    <i class="bi bi-exclamation-triangle fs-2 text-danger"></i>
-                    <h3 class="mt-1 mb-0">{{ anomalies_year }}</h3>
-                    <p class="mb-0 text-muted">Аномалий</p>
-                    <a href="{% url 'energy:anomaly_report' %}" class="stretched-link text-dark"></a>
+        <div class="col-md-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted text-uppercase fw-semibold">Общая задолженность</h6>
+                            <h2 class="mb-0 text-danger">{{ total_debt|thousands_comma }}</h2>
+                        </div>
+                        <i class="bi bi-wallet2 fs-1 text-danger opacity-75"></i>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Финансовый итог и Потребление по типам ресурсов (ряд 3) -->
-    <div class="row mb-2">
-        <div class="col-md-6 mb-2">
-            <div class="card h-100 shadow-sm">
-                <div class="card-header bg-secondary text-white py-2">
-                    <i class="bi bi-coin"></i> Финансовый итог
-                </div>
-                <div class="card-body py-2">
-                    <ul class="list-group list-group-flush">
-                        <li class="list-group-item d-flex justify-content-between py-1">
-                            <strong>Всего по договорам:</strong>
-                            <span>{{ total_amount|space_thousands }} ₽</span>
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between py-1">
-                            <strong>Оплачено:</strong>
-                            <span class="text-success">{{ total_paid|space_thousands }} ₽</span>
-                        </li>
-                        <li class="list-group-item d-flex justify-content-between py-1">
-                            <strong>Осталось оплатить:</strong>
-                            <span class="text-danger">{{ remaining|space_thousands }} ₽</span>
-                        </li>
-                    </ul>
+    <!-- Вторая строка – показатели по заявкам -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted text-uppercase fw-semibold">Всего заявок</h6>
+                            <h2 class="mb-0">{{ total_requests|default:0 }}</h2>
+                        </div>
+                        <i class="bi bi-clipboard fs-1 text-primary opacity-75"></i>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-6 mb-2">
-            <div class="card h-100 shadow-sm">
-                <div class="card-header bg-secondary text-white py-2">
-                    <i class="bi bi-bar-chart-steps"></i> Потребление по типам ресурсов
+        <div class="col-md-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted text-uppercase fw-semibold">Активных заявок</h6>
+                            <h2 class="mb-0">{{ active_requests|default:0 }}</h2>
+                        </div>
+                        <i class="bi bi-play-circle fs-1 text-info opacity-75"></i>
+                    </div>
                 </div>
-                <div class="card-body py-2">
-                    <div class="table-responsive">
-                        <table class="table table-sm table-bordered mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Тип ресурса</th>
-                                    <th>Потребление (ед.)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in consumption_by_type %}
-                                <tr>
-                                    <td>{{ item.name }}</td>
-                                    <td>{{ item.consumption|floatformat:1 }} {{ item.unit }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted text-uppercase fw-semibold">Завершённых заявок</h6>
+                            <h2 class="mb-0">{{ completed_requests|default:0 }}</h2>
+                        </div>
+                        <i class="bi bi-check-circle fs-1 text-success opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted text-uppercase fw-semibold">Просроченных заявок</h6>
+                            <h2 class="mb-0">{{ overdue_requests|default:0 }}</h2>
+                        </div>
+                        <i class="bi bi-exclamation-triangle fs-1 text-danger opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Третья строка – график и последние договоры -->
+    <div class="row mt-4">
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent">
+                    <i class="bi bi-pie-chart"></i> Договоры по типам
+                </div>
+                <div class="card-body d-flex justify-content-center">
+                    <canvas id="contractsByTypeChart" style="max-width: 100%; height: auto; max-height: 260px;"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent">
+                    <i class="bi bi-clock-history"></i> Последние договоры
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for contract in latest_contracts %}
+                        <a href="{% url 'exploitation_app:contract_detail' contract.id %}" class="list-group-item list-group-item-action">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ contract.contract_number }}</strong>
+                                    <span class="badge bg-secondary ms-2">{{ contract.get_contract_type_display }}</span>
+                                    <div class="small text-muted">{{ contract.building.address }}</div>
+                                </div>
+                                <i class="bi bi-chevron-right"></i>
+                            </div>
+                        </a>
+                        {% empty %}
+                        <div class="list-group-item text-muted">Нет договоров</div>
+                        {% endfor %}
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const ctx = document.getElementById('contractsByTypeChart');
+        if (!ctx) return;
+        const labels = {{ chart_labels|safe }};
+        const data = {{ chart_data|safe }};
+        if (labels && labels.length > 0 && data && data.length > 0) {
+            new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6c757d', '#fd7e14', '#20c997', '#6610f2']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+        } else {
+            ctx.parentNode.innerHTML = '<p class="text-muted text-center">Нет данных для отображения</p>';
+        }
+    });
+</script>
 {% endblock %}

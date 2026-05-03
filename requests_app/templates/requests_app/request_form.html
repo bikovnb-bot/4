@@ -1,167 +1,249 @@
 {% extends 'base.html' %}
 {% load custom_filters %}
 
-{% block title %}{% if form.instance.pk %}Редактирование заявки{% else %}Новая заявка{% endif %}{% endblock %}
+{% block title %}{% if form.instance.pk %}Редактирование заявки № {{ form.instance.request_number }}{% else %}Новая заявка{% endif %}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ru.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        if (typeof flatpickr !== 'undefined') {
-            const dateFields = document.querySelectorAll('.datepicker');
-            if (dateFields.length) {
-                flatpickr(dateFields, {
-                    dateFormat: "d.m.Y",
-                    locale: "ru",
-                    allowInput: true
-                });
+        flatpickr(".datepicker", {
+            dateFormat: "d.m.Y",
+            locale: "ru",
+            allowInput: true
+        });
+        flatpickr(".datetimepicker", {
+            enableTime: true,
+            dateFormat: "d.m.Y H:i",
+            locale: "ru",
+            time_24hr: true,
+            allowInput: true
+        });
+
+        // Управление показом поля даты создания для «ранней» заявки
+        const isOlderCheckbox = document.getElementById('is_older_checkbox');
+        const customDateGroup = document.getElementById('custom-created-at-group');
+        if (isOlderCheckbox && customDateGroup) {
+            function toggleCustomDate() {
+                customDateGroup.style.display = isOlderCheckbox.checked ? 'block' : 'none';
             }
+            isOlderCheckbox.addEventListener('change', toggleCustomDate);
+            toggleCustomDate();
+        }
+
+        // Учёт времени выполнения
+        const trackCheckbox = document.getElementById('{{ form.track_time.id_for_label }}');
+        const timeGroup = document.getElementById('time-spent-group');
+        if (trackCheckbox) {
+            function toggleTime() {
+                timeGroup.style.display = trackCheckbox.checked ? 'block' : 'none';
+            }
+            trackCheckbox.addEventListener('change', toggleTime);
+            toggleTime();
+        }
+
+        // Причина приостановки в зависимости от статуса
+        const statusSelect = document.getElementById('{{ form.status.id_for_label }}');
+        const suspensionGroup = document.getElementById('suspension-reason-group');
+        if (statusSelect) {
+            function toggleSuspensionReason() {
+                suspensionGroup.style.display = statusSelect.value === 'suspended' ? 'block' : 'none';
+            }
+            statusSelect.addEventListener('change', toggleSuspensionReason);
+            toggleSuspensionReason();
         }
     });
 </script>
 {% endblock %}
 
 {% block content %}
-<div class="mb-3">
-    <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left"></i> Назад
-    </a>
-</div>
-
-<div class="card shadow-sm">
-    <div class="card-header bg-light">
-        <h5 class="mb-0">{% if form.instance.pk %}✏️ Редактирование заявки № {{ form.instance.request_number }}{% else %}➕ Новая заявка{% endif %}</h5>
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>{% if form.instance.pk %}✏️ Редактирование заявки № {{ form.instance.request_number }}{% else %}➕ Новая заявка{% endif %}</h2>
+        <a href="{% url 'requests_app:request_list' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-list-ul"></i> К списку заявок
+        </a>
     </div>
-    <div class="card-body">
-        <form method="post" enctype="multipart/form-data">
-            {% csrf_token %}
-            <div class="row g-3">
-                <!-- Первая колонка: здание, помещение, тип, приоритет, статус -->
-                <div class="col-md-4">
-                    {% for field in form %}
-                        {% if field.name in 'building,room_number,request_type,priority,status' %}
-                            <div class="mb-3">
-                                <label for="{{ field.id_for_label }}" class="form-label small fw-semibold">
-                                    {% if field.name == 'building' %}
-                                        <i class="bi bi-building"></i>
-                                    {% elif field.name == 'room_number' %}
-                                        <i class="bi bi-door-closed"></i>
-                                    {% elif field.name == 'request_type' %}
-                                        <i class="bi bi-tag"></i>
-                                    {% elif field.name == 'priority' %}
-                                        <i class="bi bi-flag"></i>
-                                    {% elif field.name == 'status' %}
-                                        <i class="bi bi-check-circle"></i>
-                                    {% endif %}
-                                    {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
-                                </label>
-                                {{ field }}
-                                {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
-                                {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
-                            </div>
-                        {% endif %}
-                    {% endfor %}
-                </div>
 
-                <!-- Вторая колонка: ответственный, плановая дата, комментарий -->
-                <div class="col-md-4">
-                    {% for field in form %}
-                        {% if field.name in 'assigned_to,planned_date,comment' %}
-                            <div class="mb-3">
-                                <label for="{{ field.id_for_label }}" class="form-label small fw-semibold">
-                                    {% if field.name == 'assigned_to' %}
-                                        <i class="bi bi-person-badge"></i>
-                                    {% elif field.name == 'planned_date' %}
-                                        <i class="bi bi-calendar"></i>
-                                    {% elif field.name == 'comment' %}
-                                        <i class="bi bi-chat"></i>
-                                    {% endif %}
-                                    {{ field.label }}
-                                </label>
-                                {% if field.name == 'planned_date' %}
-                                    <input type="text" name="planned_date" value="{{ field.value|date:'d.m.Y'|default:'' }}" class="form-control datepicker" placeholder="дд.мм.гггг">
-                                {% else %}
+    <div class="card shadow-sm">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">Основная информация</h5>
+        </div>
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <!-- Если редактирование, показываем цветной бейдж текущего статуса -->
+                {% if form.instance.pk %}
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Текущий статус</label>
+                        <div>
+                            {% if form.instance.status == 'new' or form.instance.status == 'NEW' %}
+                                <span class="badge bg-dark text-white">Новая</span>
+                            {% elif form.instance.status == 'in_progress' or form.instance.status == 'IN_PROGRESS' %}
+                                <span class="badge bg-primary">В работе</span>
+                            {% elif form.instance.status == 'completed' or form.instance.status == 'COMPLETED' %}
+                                <span class="badge bg-success">Выполнена</span>
+                            {% elif form.instance.status == 'closed' or form.instance.status == 'CLOSED' %}
+                                <span class="badge bg-secondary">Закрыта</span>
+                            {% elif form.instance.status == 'suspended' or form.instance.status == 'SUSPENDED' %}
+                                <span class="badge bg-warning text-dark">Приостановлена</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ form.instance.get_status_display }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="row g-3">
+                    <!-- Левая колонка -->
+                    <div class="col-md-4">
+                        {% for field in form %}
+                            {% if field.name in 'building,room_number,request_type,priority' %}
+                                <div class="mb-3">
+                                    <label for="{{ field.id_for_label }}" class="form-label small fw-semibold">
+                                        {% if field.name == 'building' %}<i class="bi bi-building"></i>
+                                        {% elif field.name == 'room_number' %}<i class="bi bi-door-closed"></i>
+                                        {% elif field.name == 'request_type' %}<i class="bi bi-tag"></i>
+                                        {% elif field.name == 'priority' %}<i class="bi bi-flag"></i>
+                                        {% endif %}
+                                        {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
+                                    </label>
                                     {{ field }}
+                                    {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
+                                    {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    <!-- Средняя колонка -->
+                    <div class="col-md-4">
+                        {% for field in form %}
+                            {% if field.name in 'assigned_to,planned_date,comment,is_older,custom_created_at,status' %}
+                                {% if field.name == 'is_older' %}
+                                    <div class="mb-3 form-check">
+                                        {{ field }}
+                                        <label class="form-check-label" for="{{ field.id_for_label }}">
+                                            <i class="bi bi-calendar-plus"></i> {{ field.label }}
+                                        </label>
+                                        {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
+                                        {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+                                    </div>
+                                {% elif field.name == 'custom_created_at' %}
+                                    <div id="custom-created-at-group" class="mb-3" style="display: none;">
+                                        <label for="{{ field.id_for_label }}" class="form-label small fw-semibold">
+                                            <i class="bi bi-calendar-event"></i> {{ field.label }}
+                                        </label>
+                                        {{ field }}
+                                        {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
+                                        {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+                                    </div>
+                                {% elif field.name == 'status' %}
+                                    <div class="mb-3">
+                                        <label for="{{ field.id_for_label }}" class="form-label small fw-semibold">
+                                            <i class="bi bi-check-circle"></i> {{ field.label }}
+                                        </label>
+                                        {{ field }}
+                                        {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
+                                        {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+                                    </div>
+                                {% else %}
+                                    <div class="mb-3">
+                                        <label for="{{ field.id_for_label }}" class="form-label small fw-semibold">
+                                            {% if field.name == 'assigned_to' %}<i class="bi bi-person-badge"></i>
+                                            {% elif field.name == 'planned_date' %}<i class="bi bi-calendar"></i>
+                                            {% elif field.name == 'comment' %}<i class="bi bi-chat"></i>
+                                            {% endif %}
+                                            {{ field.label }}
+                                        </label>
+                                        {% if field.name == 'planned_date' %}
+                                            <input type="text" name="planned_date" value="{{ field.value|date:'d.m.Y'|default:'' }}" class="form-control datepicker" placeholder="дд.мм.гггг">
+                                        {% else %}
+                                            {{ field }}
+                                        {% endif %}
+                                        {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
+                                        {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+                                    </div>
                                 {% endif %}
-                                {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
-                                {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
-                            </div>
-                        {% endif %}
-                    {% endfor %}
-                </div>
-
-                <!-- Третья колонка: описание, файлы, учёт времени -->
-                <div class="col-md-4">
-                    <div class="mb-3">
-                        <label for="{{ form.description.id_for_label }}" class="form-label small fw-semibold">
-                            <i class="bi bi-card-text"></i> {{ form.description.label }}{% if form.description.field.required %} <span class="text-danger">*</span>{% endif %}
-                        </label>
-                        {{ form.description }}
-                        {% if form.description.errors %}<div class="text-danger small">{{ form.description.errors }}</div>{% endif %}
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold"><i class="bi bi-paperclip"></i> Файлы (можно несколько)</label>
-                        <input type="file" name="files" multiple class="form-control" id="fileInput">
-                        <div id="filePreview" class="mt-2 small text-muted"></div>
+                            {% endif %}
+                        {% endfor %}
                     </div>
 
-                    <!-- Учёт времени выполнения -->
-                    <div class="mb-3">
-                        <div class="form-check">
-                            {{ form.track_time }}
-                            <label class="form-check-label" for="{{ form.track_time.id_for_label }}">
-                                <i class="bi bi-stopwatch"></i> {{ form.track_time.label }}
-                            </label>
-                        </div>
-                    </div>
-                    <div id="time-spent-group" style="display: none;">
+                    <!-- Правая колонка -->
+                    <div class="col-md-4">
                         <div class="mb-3">
-                            <label for="{{ form.time_spent.id_for_label }}" class="form-label small fw-semibold">
-                                <i class="bi bi-hourglass-split"></i> {{ form.time_spent.label }}
+                            <label for="{{ form.description.id_for_label }}" class="form-label small fw-semibold">
+                                <i class="bi bi-card-text"></i> {{ form.description.label }}{% if form.description.field.required %} <span class="text-danger">*</span>{% endif %}
                             </label>
-                            {{ form.time_spent }}
-                            {% if form.time_spent.help_text %}<div class="form-text small">{{ form.time_spent.help_text }}</div>{% endif %}
-                            {% if form.time_spent.errors %}<div class="text-danger small">{{ form.time_spent.errors }}</div>{% endif %}
+                            {{ form.description }}
+                            {% if form.description.errors %}<div class="text-danger small">{{ form.description.errors }}</div>{% endif %}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold"><i class="bi bi-paperclip"></i> Файлы (можно несколько)</label>
+                            <input type="file" name="files" multiple class="form-control" id="fileInput">
+                            <div id="filePreview" class="mt-2 small text-muted"></div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                {{ form.track_time }}
+                                <label class="form-check-label" for="{{ form.track_time.id_for_label }}">
+                                    <i class="bi bi-stopwatch"></i> {{ form.track_time.label }}
+                                </label>
+                            </div>
+                        </div>
+                        <div id="time-spent-group" style="display: none;">
+                            <div class="mb-3">
+                                <label for="{{ form.time_spent.id_for_label }}" class="form-label small fw-semibold">
+                                    <i class="bi bi-hourglass-split"></i> {{ form.time_spent.label }}
+                                </label>
+                                {{ form.time_spent }}
+                                {% if form.time_spent.help_text %}<div class="form-text small">{{ form.time_spent.help_text }}</div>{% endif %}
+                                {% if form.time_spent.errors %}<div class="text-danger small">{{ form.time_spent.errors }}</div>{% endif %}
+                            </div>
+                        </div>
+                        <div id="suspension-reason-group" style="display: none;">
+                            <div class="mb-3">
+                                <label for="{{ form.suspension_reason.id_for_label }}" class="form-label small fw-semibold">
+                                    <i class="bi bi-info-circle"></i> {{ form.suspension_reason.label }}
+                                </label>
+                                {{ form.suspension_reason }}
+                                {% if form.suspension_reason.errors %}<div class="text-danger small">{{ form.suspension_reason.errors }}</div>{% endif %}
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="d-flex justify-content-end mt-3">
-                <button type="submit" class="btn btn-primary me-2"><i class="bi bi-save"></i> Сохранить</button>
-                <a href="{% url 'requests_app:request_list' %}" class="btn btn-secondary"><i class="bi bi-x-circle"></i> Отмена</a>
-            </div>
-        </form>
+                <div class="d-flex justify-content-end mt-3">
+                    <button type="submit" class="btn btn-primary me-2"><i class="bi bi-save"></i> Сохранить</button>
+                    <a href="{% url 'requests_app:request_list' %}" class="btn btn-outline-secondary"><i class="bi bi-x-circle"></i> Отмена</a>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
 <script>
-    const fileInput = document.getElementById('fileInput');
-    const filePreview = document.getElementById('filePreview');
-    if (fileInput) {
-        fileInput.addEventListener('change', function() {
-            const files = Array.from(this.files);
-            if (files.length) {
-                const names = files.map(f => f.name).join(', ');
-                filePreview.innerHTML = `<i class="bi bi-file-earmark"></i> Выбрано: ${names}`;
-            } else {
-                filePreview.innerHTML = '';
-            }
-        });
-    }
-
-    // Динамическое отображение поля времени при активации чекбокса
-    const trackCheckbox = document.getElementById('{{ form.track_time.id_for_label }}');
-    const timeGroup = document.getElementById('time-spent-group');
-    function toggleTime() {
-        if (trackCheckbox && trackCheckbox.checked) {
-            timeGroup.style.display = 'block';
-        } else {
-            timeGroup.style.display = 'none';
+    document.addEventListener('DOMContentLoaded', function() {
+        const fileInput = document.getElementById('fileInput');
+        const filePreview = document.getElementById('filePreview');
+        if (fileInput) {
+            fileInput.addEventListener('change', function() {
+                const files = Array.from(this.files);
+                if (files.length) {
+                    const names = files.map(f => f.name).join(', ');
+                    filePreview.innerHTML = `<i class="bi bi-file-earmark"></i> Выбрано: ${names}`;
+                } else {
+                    filePreview.innerHTML = '';
+                }
+            });
         }
-    }
-    if (trackCheckbox) {
-        trackCheckbox.addEventListener('change', toggleTime);
-        toggleTime();
-    }
+    });
 </script>
 {% endblock %}

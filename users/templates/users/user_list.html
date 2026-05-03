@@ -1,203 +1,233 @@
 {% extends "base.html" %}
+{% load custom_filters %}
 
-{% block title %}Управление пользователями{% endblock %}
+{% block title %}Пользователи и группы{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
+{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>👥 Управление пользователями</h2>
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>👥 Пользователи системы</h2>
         <div>
-            <a href="{% url 'admin:auth_user_add' %}" class="btn btn-primary">
-                <i class="bi bi-plus-circle"></i> Добавить пользователя
-            </a>
+            <a href="{% url 'users:user_create' %}" class="btn btn-primary"><i class="bi bi-person-plus"></i> Добавить пользователя</a>
+            <a href="{% url 'users:group_list' %}" class="btn btn-outline-secondary"><i class="bi bi-people"></i> Управление группами</a>
+            <a href="{% url 'users:role_help' %}" class="btn btn-outline-info"><i class="bi bi-question-circle"></i> Роли и права</a>
         </div>
     </div>
 
     <!-- Статистика -->
-    <div class="row mb-4">
+    <div class="row g-3 mb-4">
         <div class="col-md-3">
-            <div class="card text-center bg-primary text-white">
-                <div class="card-body">
-                    <h3>{{ stats.total }}</h3>
-                    <p>Всего пользователей</p>
-                </div>
-            </div>
+            <div class="card border-0 shadow-sm"><div class="card-body"><h6 class="text-muted">Всего</h6><h3>{{ stats.total }}</h3></div></div>
         </div>
         <div class="col-md-3">
-            <div class="card text-center bg-success text-white">
-                <div class="card-body">
-                    <h3>{{ stats.active }}</h3>
-                    <p>Активных</p>
-                </div>
-            </div>
+            <div class="card border-0 shadow-sm"><div class="card-body"><h6 class="text-muted">Активные</h6><h3>{{ stats.active }}</h3></div></div>
         </div>
         <div class="col-md-3">
-            <div class="card text-center bg-danger text-white">
-                <div class="card-body">
-                    <h3>{{ stats.inactive }}</h3>
-                    <p>Заблокированных</p>
-                </div>
-            </div>
+            <div class="card border-0 shadow-sm"><div class="card-body"><h6 class="text-muted">Неактивные</h6><h3>{{ stats.inactive }}</h3></div></div>
         </div>
         <div class="col-md-3">
-            <div class="card text-center bg-info text-white">
-                <div class="card-body">
-                    <h3>{{ stats.by_role.MANAGER|default:0 }}</h3>
-                    <p>Менеджеров</p>
-                </div>
-            </div>
+            <div class="card border-0 shadow-sm"><div class="card-body"><h6 class="text-muted">По ролям</h6><ul class="list-unstyled mb-0 small">{% for role, cnt in stats.by_role.items %}<li><strong>{{ role }}:</strong> {{ cnt }}</li>{% endfor %}</ul></div></div>
         </div>
     </div>
 
     <!-- Фильтры -->
-    <div class="card mb-4">
+    <div class="card shadow-sm mb-3">
         <div class="card-body">
-            <form method="get" class="row g-3">
+            <form method="get" class="row g-3 align-items-end">
                 <div class="col-md-4">
+                    {{ form.search.label_tag }}
                     {{ form.search }}
                 </div>
                 <div class="col-md-3">
+                    {{ form.role.label_tag }}
                     {{ form.role }}
                 </div>
                 <div class="col-md-3">
+                    {{ form.is_active.label_tag }}
                     {{ form.is_active }}
                 </div>
                 <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary w-100">
-                        <i class="bi bi-search"></i> Фильтр
-                    </button>
+                    <button type="submit" class="btn btn-primary w-100">Применить</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Массовые действия -->
-    <form method="post" action="{% url 'users:bulk_action' %}" id="bulkForm">
-        {% csrf_token %}
-        <div class="card mb-3">
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3">
-                        <select name="action" class="form-select" required>
-                            <option value="">Выберите действие</option>
-                            <option value="delete">Удалить</option>
-                            <option value="activate">Активировать</option>
-                            <option value="deactivate">Деактивировать</option>
-                            <option value="change_role">Изменить роль</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <select name="new_role" class="form-select" id="newRoleSelect" style="display: none;">
-                            <option value="">Выберите роль</option>
-                            <option value="ADMIN">Администратор</option>
-                            <option value="MANAGER">Менеджер</option>
-                            <option value="VIEWER">Наблюдатель</option>
-                            <option value="CONTRACTOR">Исполнитель</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <button type="submit" class="btn btn-warning w-100" onclick="return confirm('Вы уверены?')">
-                            <i class="bi bi-gear"></i> Применить
-                        </button>
-                    </div>
-                    <div class="col-md-4 text-end">
-                        <button type="button" class="btn btn-outline-secondary" id="selectAllBtn">
-                            <i class="bi bi-check-all"></i> Выбрать всех
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Таблица пользователей -->
-        <div class="card">
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th><input type="checkbox" id="selectAll"></th>
-                                <th>Логин</th>
-                                <th>ФИО</th>
-                                <th>Email</th>
-                                <th>Роль</th>
-                                <th>Статус</th>
-                                <th>Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for user in users %}
-                            <tr>
-                                <td><input type="checkbox" name="user_ids" value="{{ user.id }}" class="userCheckbox"></td>
-                                <td>{{ user.username }}</th>
-                                <td>{{ user.get_full_name|default:"—" }}</th>
-                                <td>{{ user.email|default:"—" }}</th>
-                                <td>
-                                    <span class="badge bg-{% if user.profile.role == 'ADMIN' %}danger{% elif user.profile.role == 'MANAGER' %}warning{% elif user.profile.role == 'VIEWER' %}info{% else %}secondary{% endif %}">
-                                        {{ user.profile.get_role_display }}
+    <!-- Таблица пользователей -->
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table id="usersTable" class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th><input type="checkbox" id="selectAll"></th>
+                            <th>ID</th>
+                            <th>Логин</th>
+                            <th>Имя</th>
+                            <th>Email</th>
+                            <th>Роль</th>
+                            <th>Статус</th>
+                            <th>Должность</th>
+                            <th>Группы</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in users %}
+                        <tr>
+                            <td><input type="checkbox" class="user-checkbox" value="{{ u.id }}"></td>
+                            <td>{{ u.id }}</td>
+                            <td>{{ u.username }}</td>
+                            <td>{{ u.get_full_name|default:"—" }}</td>
+                            <td>{{ u.email|default:"—" }}</td>
+                            <td>
+                                <span class="badge 
+                                    {% if u.profile.role == 'ADMIN' %}bg-danger
+                                    {% elif u.profile.role == 'MANAGER' %}bg-primary
+                                    {% elif u.profile.role == 'VIEWER' %}bg-secondary
+                                    {% elif u.profile.role == 'CONTRACTOR' %}bg-success
+                                    {% else %}bg-light text-dark{% endif %}"
+                                    style="cursor: help;"
+                                    data-bs-toggle="tooltip"
+                                    data-bs-html="true"
+                                    title="
+                                        {% if u.profile.role == 'ADMIN' %}
+                                            <strong>Администратор</strong><br>Полный доступ ко всем функциям системы.
+                                        {% elif u.profile.role == 'MANAGER' %}
+                                            <strong>Менеджер</strong><br>Управление договорами, отчётами, заявками.
+                                        {% elif u.profile.role == 'VIEWER' %}
+                                            <strong>Наблюдатель</strong><br>Только просмотр договоров и отчётов.
+                                        {% elif u.profile.role == 'CONTRACTOR' %}
+                                            <strong>Исполнитель</strong><br>Доступ только к своим договорам.
+                                        {% else %}
+                                            Неизвестная роль
+                                        {% endif %}
+                                    ">
+                                    {{ u.profile.get_role_display }}
+                                </span>
+                             </td>
+                            <td>
+                                {% if u.profile.is_active %}
+                                    <span class="badge bg-success">Активен</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Заблокирован</span>
+                                {% endif %}
+                             </td>
+                            <td>{{ u.profile.position|default:"—" }}</td>
+                            <td>
+                                {% for g in u.groups.all %}
+                                    <span class="badge bg-info me-1"
+                                          style="cursor: help;"
+                                          data-bs-toggle="tooltip"
+                                          data-bs-html="true"
+                                          title="<strong>{{ g.name }}</strong><br>
+                                                 Права: 
+                                                 {% if g.permissions.all %}
+                                                    <ul>
+                                                    {% for perm in g.permissions.all %}
+                                                        <li>{{ perm.content_type.app_label }}: {{ perm.name }}</li>
+                                                    {% endfor %}
+                                                    </ul>
+                                                 {% else %}
+                                                    Нет прав
+                                                 {% endif %}">
+                                        {{ g.name }}
                                     </span>
-                                </th>
-                                <td>
-                                    {% if user.profile.is_active %}
-                                        <span class="badge bg-success">Активен</span>
-                                    {% else %}
-                                        <span class="badge bg-danger">Заблокирован</span>
-                                    {% endif %}
-                                </th>
-                                <td>
-                                    <a href="{% url 'users:user_edit' user.id %}" class="btn btn-sm btn-primary">
-                                        <i class="bi bi-pencil"></i>
-                                    </a>
-                                    <a href="{% url 'users:user_toggle_active' user.id %}" class="btn btn-sm btn-warning"
-                                       onclick="return confirm('Изменить статус пользователя?')">
-                                        <i class="bi bi-lock"></i>
-                                    </a>
-                                    <a href="{% url 'users:user_delete' user.id %}" class="btn btn-sm btn-danger"
-                                       onclick="return confirm('Удалить пользователя?')">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
-                                </th>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="7" class="text-center text-muted">Нет пользователей</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                                {% empty %}—
+                                {% endfor %}
+                             </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'users:user_edit' u.id %}" class="btn btn-outline-primary" title="Редактировать"><i class="bi bi-pencil"></i></a>
+                                    <a href="{% url 'users:user_change_password' u.id %}" class="btn btn-outline-warning" title="Сменить пароль"><i class="bi bi-key"></i></a>
+                                    <a href="{% url 'users:user_toggle_active' u.id %}" class="btn btn-outline-secondary" title="Активировать/Деактивировать"><i class="bi bi-power"></i></a>
+                                    <a href="{% url 'users:user_delete' u.id %}" class="btn btn-outline-danger" title="Удалить"><i class="bi bi-trash"></i></a>
+                                </div>
+                             </td>
+                         </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
+    </div>
+
+    <!-- Массовые действия -->
+    <form method="post" action="{% url 'users:bulk_action' %}" class="mt-3" id="bulkActionForm">
+        {% csrf_token %}
+        <div class="row g-2 align-items-center">
+            <div class="col-auto">
+                <select name="action" class="form-select form-select-sm" id="bulkActionSelect">
+                    <option value="">Выберите действие</option>
+                    <option value="delete">Удалить выбранных</option>
+                    <option value="activate">Активировать</option>
+                    <option value="deactivate">Деактивировать</option>
+                    <option value="change_role">Сменить роль</option>
+                </select>
+            </div>
+            <div class="col-auto" id="role_select_wrapper" style="display:none;">
+                <select name="new_role" class="form-select form-select-sm">
+                    {% for code, name in form.fields.role.choices %}
+                        {% if code %}
+                        <option value="{{ code }}">{{ name }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-secondary">Применить</button>
+            </div>
+        </div>
+        <input type="hidden" name="user_ids" id="selectedUserIds">
     </form>
 </div>
 
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
 <script>
-    // Показать/скрыть выбор роли
-    document.querySelector('select[name="action"]').addEventListener('change', function() {
-        const roleSelect = document.getElementById('newRoleSelect');
-        if (this.value === 'change_role') {
-            roleSelect.style.display = 'block';
-            roleSelect.required = true;
-        } else {
-            roleSelect.style.display = 'none';
-            roleSelect.required = false;
-        }
-    });
-
-    // Выбрать всех
-    document.getElementById('selectAll').addEventListener('change', function() {
-        document.querySelectorAll('.userCheckbox').forEach(cb => {
-            cb.checked = this.checked;
+    $(document).ready(function() {
+        // DataTable
+        $('#usersTable').DataTable({
+            language: { url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/ru.json' },
+            order: [[1, 'asc']],
+            pageLength: 25,
+            columnDefs: [
+                { orderable: false, targets: [0, -1] }
+            ]
         });
-    });
 
-    // Выбрать всех через кнопку
-    document.getElementById('selectAllBtn').addEventListener('click', function() {
-        const allChecked = document.querySelectorAll('.userCheckbox:checked').length === document.querySelectorAll('.userCheckbox').length;
-        document.querySelectorAll('.userCheckbox').forEach(cb => {
-            cb.checked = !allChecked;
+        // Select all
+        $('#selectAll').on('change', function() {
+            $('.user-checkbox').prop('checked', this.checked);
         });
-        document.getElementById('selectAll').checked = !allChecked;
+
+        // Show/hide role select for bulk action
+        $('#bulkActionSelect').on('change', function() {
+            if ($(this).val() === 'change_role') {
+                $('#role_select_wrapper').show();
+            } else {
+                $('#role_select_wrapper').hide();
+            }
+        });
+
+        // Bulk action submit
+        $('#bulkActionForm').on('submit', function(e) {
+            let selected = [];
+            $('.user-checkbox:checked').each(function() {
+                selected.push($(this).val());
+            });
+            if (selected.length === 0) {
+                alert('Выберите хотя бы одного пользователя.');
+                e.preventDefault();
+                return false;
+            }
+            $('#selectedUserIds').val(selected.join(','));
+        });
     });
 </script>
 {% endblock %}

@@ -1,147 +1,474 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% load custom_filters %}
 
-{% block title %}Заявки на эксплуатацию{% endblock %}
+{% block title %}Заявки{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>📋 Заявки на эксплуатацию</h2>
-    <a href="{% url 'requests_app:request_create' %}" class="btn btn-primary">
-        <i class="bi bi-plus-circle"></i> Создать заявку
-    </a>
-</div>
-
-<!-- Фильтры -->
-<div class="card mb-4 shadow-sm">
-    <div class="card-body">
-        <form method="get" class="row g-3">
-            <div class="col-md-3">
-                <label class="form-label small fw-semibold">Статус</label>
-                <select name="status" class="form-select form-select-sm">
-                    <option value="">Все</option>
-                    {% for value, label in status_choices %}
-                        <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small fw-semibold">Приоритет</label>
-                <select name="priority" class="form-select form-select-sm">
-                    <option value="">Все</option>
-                    {% for value, label in priority_choices %}
-                        <option value="{{ value }}" {% if request.GET.priority == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small fw-semibold">Здание</label>
-                <select name="building" class="form-select form-select-sm">
-                    <option value="">Все</option>
-                    {% for b in buildings %}
-                        <option value="{{ b.id }}" {% if request.GET.building|stringformat:"s" == b.id|stringformat:"s" %}selected{% endif %}>{{ b }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary btn-sm me-2">Применить</button>
-                <a href="{% url 'requests_app:request_list' %}" class="btn btn-secondary btn-sm">Сбросить</a>
-            </div>
-        </form>
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>📋 Заявки</h2>
+        <div>
+            <a href="{% url 'requests_app:request_create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Новая заявка
+            </a>
+            <a href="{% url 'requests_app:export_excel' %}?{{ request.GET.urlencode }}" class="btn btn-success ms-2">
+                <i class="bi bi-file-excel"></i> Экспорт в Excel
+            </a>
+            <a href="{% url 'requests_app:dashboard' %}" class="btn btn-info ms-2">
+                <i class="bi bi-graph-up"></i> Дашборд
+            </a>
+        </div>
     </div>
-</div>
 
-<!-- Таблица заявок -->
-<div class="card shadow-sm">
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-sm table-striped table-hover mb-0 align-middle">
-                <thead class="table-light">
-                    <tr class="text-center">
-                        <th style="width: 8%">№</th>
-                        <th style="width: 15%">Здание</th>
-                        <th style="width: 8%">Помещ.</th>
-                        <th style="width: 15%">Тип</th>
-                        <th style="width: 10%">Приоритет</th>
-                        <th style="width: 10%">Статус</th>
-                        <th style="width: 12%">Создатель</th>
-                        <th style="width: 12%">Ответственный</th>
-                        <th style="width: 10%">Создана</th>
-                        <th style="width: 10%">Действия</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for req in requests %}
-                        <tr class="text-center align-middle">
-                            <td>
-                                <strong>{{ req.request_number }}</strong>
-                                <i class="bi bi-info-circle text-secondary ms-1" 
-                                   data-bs-toggle="tooltip" 
-                                   data-bs-placement="top" 
-                                   title="{{ req.description|escape }}"></i>
+    <!-- Фильтры -->
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Статус</label>
+                    <select name="status" class="form-select">
+                        <option value="">Все</option>
+                        {% for code, name in status_choices %}
+                        <option value="{{ code }}" {% if selected_status == code %}selected{% endif %}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Исполнитель</label>
+                    <select name="executor" class="form-select">
+                        <option value="">Все</option>
+                        {% for executor in executors %}
+                        <option value="{{ executor.id }}" {% if selected_executor|stringformat:"s" == executor.id|stringformat:"s" %}selected{% endif %}>
+                            {{ executor.get_full_name|default:executor.username }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Приоритет</label>
+                    <select name="priority" class="form-select">
+                        <option value="">Все</option>
+                        {% for code, name in priority_choices %}
+                        <option value="{{ code }}" {% if selected_priority == code %}selected{% endif %}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Поиск по номеру</label>
+                    <input type="text" name="search" class="form-control" placeholder="№ заявки" value="{{ search_query|default:'' }}">
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-primary w-100">Фильтр</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Таблица заявок -->
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle mb-0 text-center">
+                    <thead class="table-light">
+                        <tr>
+                            <th>№ заявки</th>
+                            <th>Здание</th>
+                            <th>Помещение</th>
+                            <th>Приоритет</th>
+                            <th>Статус</th>
+                            <th>Создатель</th>
+                            <th>Ответственный</th>
+                            <th>Дата создания</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for req in requests %}
+                        <tr id="row-{{ req.id }}">
+                            <td class="text-center">
+                                <a href="{% url 'requests_app:request_detail' req.id %}" class="fw-semibold text-decoration-none">
+                                    {{ req.request_number }}
+                                </a>
                             </td>
-                            <td class="text-start">{{ req.building }}</td>
-                            <td>{{ req.room_number }}</td>
-                            <td class="text-start">
-                                {% if req.request_type.icon %}
-                                    <span class="badge bg-light text-dark">{{ req.request_type.icon }}</span>
+                            <td class="text-center">{{ req.building.name|default:req.building.address|default:"—" }}</td>
+                            <td class="text-center">{{ req.room_number|default:"—" }}</td>
+                            <td class="text-center">
+                                {% if req.priority == 'high' %}
+                                    <span class="badge bg-danger">Высокий</span>
+                                {% elif req.priority == 'medium' %}
+                                    <span class="badge bg-warning text-dark">Средний</span>
+                                {% else %}
+                                    <span class="badge bg-info">Низкий</span>
                                 {% endif %}
-                                {{ req.request_type.name }}
                             </td>
-                            <td>
-                                <span class="badge bg-{% if req.priority == 'high' %}danger{% elif req.priority == 'medium' %}warning{% else %}secondary{% endif %}">
-                                    {{ req.get_priority_display }}
-                                </span>
-                            </td>
-                            <td>
-                                <span class="badge bg-{% if req.status == 'new' %}info{% elif req.status == 'in_progress' %}primary{% elif req.status == 'completed' %}success{% elif req.status == 'closed' %}secondary{% else %}secondary{% endif %}">
+                            <td class="text-center">
+                                <span class="badge status-badge 
+                                    {% if req.status == 'new' %}bg-secondary
+                                    {% elif req.status == 'in_progress' %}bg-primary
+                                    {% elif req.status == 'completed' %}bg-success
+                                    {% elif req.status == 'closed' %}bg-dark
+                                    {% elif req.status == 'suspended' %}bg-warning text-dark
+                                    {% endif %}"
+                                    style="cursor: context-menu;"
+                                    data-request-id="{{ req.id }}"
+                                    data-status="{{ req.status }}"
+                                    data-assigned-to="{{ req.assigned_to.id|default:'' }}">
                                     {{ req.get_status_display }}
                                 </span>
                             </td>
-                            <td>{{ req.created_by.get_full_name|default:req.created_by.username|truncatechars:20 }}</td>
-                            <td>
-                                {% if req.assigned_to %}
-                                    {{ req.assigned_to.get_full_name|default:req.assigned_to.username|truncatechars:20 }}
+                            <td class="text-center">
+                                {% if req.created_by %}
+                                    {{ req.created_by.get_full_name|default:req.created_by.username }}
                                 {% else %}
                                     —
                                 {% endif %}
                             </td>
-                            <td>{{ req.created_at|date:"d.m.Y" }}</td>
-                            <td>
-                                <a href="{% url 'requests_app:request_detail' req.pk %}" class="btn btn-sm btn-outline-info" title="Просмотр">
-                                    <i class="bi bi-eye"></i>
-                                </a>
-                                {% if can_edit %}
-                                    <a href="{% url 'requests_app:request_edit' req.pk %}" class="btn btn-sm btn-outline-secondary" title="Редактировать">
-                                        <i class="bi bi-pencil"></i>
-                                    </a>
-                                    <a href="{% url 'requests_app:request_delete' req.pk %}" class="btn btn-sm btn-outline-danger" title="Удалить">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
+                            <td class="text-center assigned-to-name-{{ req.id }}">
+                                {% if req.assigned_to %}
+                                    {{ req.assigned_to.get_full_name|default:req.assigned_to.username }}
+                                {% else %}
+                                    —
                                 {% endif %}
                             </td>
+                            <td class="text-center">{{ req.created_at|date:"d.m.Y H:i" }}</td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'requests_app:request_detail' req.id %}" class="btn btn-outline-info" title="Просмотр">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="{% url 'requests_app:request_edit' req.id %}" class="btn btn-outline-primary" title="Редактировать">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <a href="{% url 'requests_app:request_delete' req.id %}" class="btn btn-outline-danger" title="Удалить" onclick="return confirm('Удалить заявку {{ req.request_number }}?')">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </div>
+                            </td>
                         </tr>
-                    {% empty %}
-                        <tr>
-                            <td colspan="10" class="text-center text-muted py-4">Нет заявок, соответствующих фильтрам</td>
-                        </tr>
+                        {% empty %}
+                        <tr><td colspan="9" class="text-muted text-center">Нет заявок</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Пагинация -->
+    {% if requests.has_other_pages %}
+    <nav aria-label="Навигация по страницам" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if requests.has_previous %}
+                <li class="page-item"><a class="page-link" href="?page={{ requests.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_executor %}&executor={{ selected_executor }}{% endif %}{% if selected_priority %}&priority={{ selected_priority }}{% endif %}">«</a></li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link">«</span></li>
+            {% endif %}
+            {% for num in requests.paginator.page_range %}
+                {% if requests.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                {% elif num > requests.number|add:'-3' and num < requests.number|add:'3' %}
+                    <li class="page-item"><a class="page-link" href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_executor %}&executor={{ selected_executor }}{% endif %}{% if selected_priority %}&priority={{ selected_priority }}{% endif %}">{{ num }}</a></li>
+                {% endif %}
+            {% endfor %}
+            {% if requests.has_next %}
+                <li class="page-item"><a class="page-link" href="?page={{ requests.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_executor %}&executor={{ selected_executor }}{% endif %}{% if selected_priority %}&priority={{ selected_priority }}{% endif %}">»</a></li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link">»</span></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<!-- Контекстное меню -->
+<div id="status-context-menu" class="context-menu" style="display: none; position: fixed; z-index: 1000; background: white; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); padding: 8px 0; min-width: 200px;">
+    <div id="menu-assign" style="display: none;">
+        <a href="#" class="menu-item" data-action="assign"><i class="bi bi-person-plus me-2"></i> Назначить исполнителя</a>
+    </div>
+    <div id="menu-mark-completed" style="display: none;">
+        <a href="#" class="menu-item" data-action="mark-completed"><i class="bi bi-check-circle me-2"></i> Отметить выполненной</a>
+    </div>
+    <div id="menu-suspend" style="display: none;">
+        <a href="#" class="menu-item" data-action="suspend"><i class="bi bi-pause-circle me-2"></i> Приостановить</a>
+    </div>
+    <div id="menu-resume" style="display: none;">
+        <a href="#" class="menu-item" data-action="resume"><i class="bi bi-play-circle me-2"></i> Возобновить</a>
+    </div>
+    <div id="menu-close" style="display: none;">
+        <a href="#" class="menu-item" data-action="close"><i class="bi bi-check2-circle me-2"></i> Закрыть заявку (с материалами)</a>
+    </div>
+</div>
+
+<!-- Модальное окно для выбора исполнителя -->
+<div class="modal fade" id="assignModal" tabindex="-1" aria-labelledby="assignModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="assignModalLabel">Назначить исполнителя</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label">Выберите сотрудника</label>
+                <select id="assign-user-select" class="form-select" size="10">
+                    <option value="">---------</option>
+                    {% for u in all_users %}
+                        <option value="{{ u.id }}">{{ u.first_name }} {{ u.last_name }} ({{ u.username }})</option>
                     {% endfor %}
-                </tbody>
-            </table>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" id="confirm-assign-btn">Назначить</button>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Пагинация -->
-{% include 'pagination.html' with page_obj=page_obj %}
+<style>
+    .context-menu .menu-item {
+        display: block; padding: 6px 12px; text-decoration: none; color: #333; font-size: 14px;
+    }
+    .context-menu .menu-item:hover { background-color: #f0f0f0; }
+    .context-menu .menu-item i { width: 20px; text-align: center; }
+</style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
+    (function() {
+        const userRole = "{{ user_role|default:'VIEWER' }}";
+        const currentUserId = {{ request.user.id }};
+        const allUsers = {{ all_users|safe }};
+        const csrfToken = "{{ csrf_token }}";
+
+        let activeRequestId = null;
+        const menu = document.getElementById('status-context-menu');
+        const assignModalEl = document.getElementById('assignModal');
+        let assignModal = null;
+        if (typeof bootstrap !== 'undefined') assignModal = new bootstrap.Modal(assignModalEl);
+
+        // Функция доступных действий
+        function getAvailableActions(status, assignedTo) {
+            // Администратор видит все действия для любой заявки
+            if (userRole === 'ADMIN') {
+                return ['assign', 'mark-completed', 'suspend', 'resume', 'close'];
+            }
+            
+            const isManagerDispatcher = ['MANAGER', 'DISPATCHER'].includes(userRole);
+            const isExecutor = (assignedTo && assignedTo == currentUserId);
+            
+            // Менеджер/диспетчер: действия по статусу
+            if (isManagerDispatcher) {
+                const actions = [];
+                if (status === 'new' || status === 'in_progress') actions.push('assign');
+                if (status === 'in_progress') {
+                    actions.push('mark-completed', 'suspend');
+                }
+                if (status === 'suspended') actions.push('resume');
+                if (status === 'completed') actions.push('close');
+                return actions;
+            }
+            
+            // Исполнитель (CONTRACTOR)
+            if (status === 'in_progress' && isExecutor) {
+                return ['mark-completed', 'suspend'];
+            }
+            
+            // Остальные (VIEWER и т.д.)
+            return [];
+        }
+
+        function showMenu(badge, reqId) {
+            activeRequestId = reqId;
+            const status = badge.dataset.status;
+            const assignedTo = badge.dataset.assignedTo || '';
+            const actions = getAvailableActions(status, assignedTo);
+            document.querySelectorAll('#status-context-menu > div').forEach(div => div.style.display = 'none');
+            if (actions.includes('assign')) document.getElementById('menu-assign').style.display = 'block';
+            if (actions.includes('mark-completed')) document.getElementById('menu-mark-completed').style.display = 'block';
+            if (actions.includes('suspend')) document.getElementById('menu-suspend').style.display = 'block';
+            if (actions.includes('resume')) document.getElementById('menu-resume').style.display = 'block';
+            if (actions.includes('close')) document.getElementById('menu-close').style.display = 'block';
+            if (actions.length) {
+                const rect = badge.getBoundingClientRect();
+                let left = rect.right + 5;
+                let top = rect.top;
+                if (left + menu.offsetWidth > window.innerWidth) left = rect.left - menu.offsetWidth - 5;
+                menu.style.display = 'block';
+                menu.style.left = left + 'px';
+                menu.style.top = top + 'px';
+            } else {
+                menu.style.display = 'none';
+            }
+        }
+
+        function hideMenu() { menu.style.display = 'none'; }
+
+        function assignExecutor(requestId, userId) {
+            if (!userId) {
+                alert('Выберите исполнителя');
+                return;
+            }
+            fetch(`/requests/${requestId}/assign/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: `assigned_to=${userId}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const badge = document.querySelector(`.status-badge[data-request-id="${requestId}"]`);
+                    if (badge) {
+                        const newStatus = badge.dataset.status === 'new' ? 'in_progress' : badge.dataset.status;
+                        badge.dataset.status = newStatus;
+                        if (newStatus === 'in_progress') {
+                            badge.classList.remove('bg-secondary');
+                            badge.classList.add('bg-primary');
+                            badge.textContent = 'В работе';
+                        }
+                    }
+                    const assignedCell = document.querySelector(`.assigned-to-name-${requestId}`);
+                    if (assignedCell) {
+                        const user = allUsers.find(u => u.id == userId);
+                        assignedCell.textContent = user ? (user.first_name + ' ' + user.last_name).trim() || user.username : '—';
+                    }
+                    if (assignModal) assignModal.hide(); else hideAssignModal();
+                } else {
+                    alert(data.message || 'Ошибка при назначении');
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Ошибка соединения');
+            });
+        }
+
+        function hideAssignModal() {
+            if (assignModal) assignModal.hide();
+            else {
+                assignModalEl.style.display = 'none';
+                assignModalEl.classList.remove('show');
+                document.body.classList.remove('modal-open');
+                const backdrop = document.querySelector('.modal-backdrop');
+                if (backdrop) backdrop.remove();
+            }
+        }
+
+        function showAssignModal() {
+            if (assignModal) assignModal.show();
+            else {
+                assignModalEl.style.display = 'block';
+                assignModalEl.classList.add('show');
+                document.body.classList.add('modal-open');
+                const backdrop = document.createElement('div');
+                backdrop.className = 'modal-backdrop fade show';
+                document.body.appendChild(backdrop);
+            }
+        }
+
+        // Обработчики правого клика
+        document.querySelectorAll('.status-badge').forEach(b => {
+            b.addEventListener('contextmenu', e => {
+                e.preventDefault();
+                showMenu(b, b.dataset.requestId);
+            });
         });
-    });
+
+        document.addEventListener('click', e => { if (!menu.contains(e.target)) hideMenu(); });
+        window.addEventListener('scroll', hideMenu);
+        window.addEventListener('resize', hideMenu);
+
+        // Обработка пунктов меню
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.addEventListener('click', e => {
+                e.preventDefault();
+                const action = item.dataset.action;
+                if (!activeRequestId) return;
+                if (action === 'assign') {
+                    showAssignModal();
+                    hideMenu();
+                    return;
+                }
+                const urls = {
+                    'mark-completed': `/requests/${activeRequestId}/mark-completed/`,
+                    suspend: `/requests/${activeRequestId}/suspend/`,
+                    resume: `/requests/${activeRequestId}/resume/`,
+                    close: `/requests/${activeRequestId}/close/`
+                };
+                const url = urls[action];
+                if (!url) return;
+                if (action === 'suspend') {
+                    const reason = prompt('Введите причину приостановки:');
+                    if (reason && reason.trim()) {
+                        const form = document.createElement('form');
+                        form.method = 'POST';
+                        form.action = url;
+                        form.innerHTML = `<input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}"><input type="hidden" name="suspension_reason" value="${reason.trim()}">`;
+                        document.body.appendChild(form);
+                        form.submit();
+                    }
+                } else if (action === 'mark-completed') {
+                    fetch(url, {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const badge = document.querySelector(`.status-badge[data-request-id="${activeRequestId}"]`);
+                            if (badge) {
+                                badge.dataset.status = 'completed';
+                                badge.classList.remove('bg-primary');
+                                badge.classList.add('bg-success');
+                                badge.textContent = 'Выполнена';
+                            }
+                        } else {
+                            alert(data.message || 'Ошибка при отметке выполнения');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Ошибка:', error);
+                        alert('Ошибка соединения');
+                    });
+                } else if (action === 'resume') {
+                    fetch(url, {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const badge = document.querySelector(`.status-badge[data-request-id="${activeRequestId}"]`);
+                            if (badge) {
+                                badge.dataset.status = 'in_progress';
+                                badge.classList.remove('bg-warning', 'text-dark');
+                                badge.classList.add('bg-primary');
+                                badge.textContent = 'В работе';
+                            }
+                        } else {
+                            alert(data.message || 'Ошибка при возобновлении');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Ошибка:', error);
+                        alert('Ошибка соединения');
+                    });
+                } else if (action === 'close') {
+                    window.location.href = url;
+                }
+                hideMenu();
+            });
+        });
+
+        document.getElementById('confirm-assign-btn')?.addEventListener('click', () => {
+            const userId = document.getElementById('assign-user-select').value;
+            if (userId) assignExecutor(activeRequestId, userId);
+            else alert('Выберите исполнителя');
+        });
+    })();
 </script>
 {% endblock %}

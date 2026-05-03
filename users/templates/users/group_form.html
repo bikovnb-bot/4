@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% load custom_filters %}
+
+{% block title %}{% if is_edit %}Редактирование{% else %}Создание{% endif %} группы{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between"><h2>{% if is_edit %}✏️ {{ group.name }}{% else %}➕ Создание группы{% endif %}</h2><a href="{% url 'users:group_list' %}" class="btn btn-outline-secondary">Отмена</a></div>
+    <div class="card shadow-sm mt-3"><div class="card-body">
+        <form method="post">{% csrf_token %}
+            {% for field in form %}
+            <div class="mb-3">{{ field.label_tag }} {{ field }}{% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors }}</div>{% endif %}</div>
+            {% endfor %}
+            <button type="submit" class="btn btn-primary">Сохранить</button>
+        </form>
+    </div></div>
+</div>
+{% endblock %}

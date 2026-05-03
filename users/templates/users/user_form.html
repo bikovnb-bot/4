@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% load custom_filters %}
+
+{% block title %}{% if is_edit %}Редактирование{% else %}Создание{% endif %} пользователя{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>{% if is_edit %}✏️ {{ user.username }}{% else %}➕ Добавление пользователя{% endif %}</h2>
+        <a href="{% url 'users:user_list' %}" class="btn btn-outline-secondary">Назад</a>
+    </div>
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {% for field in form %}
+                    <div class="mb-3">
+                        {{ field.label_tag }}
+                        {{ field }}
+                        {% if field.field.help_text %}
+                            <div class="form-text text-muted small">{{ field.field.help_text|safe }}</div>
+                        {% endif %}
+                        {% if field.errors %}
+                            <div class="invalid-feedback d-block">{{ field.errors }}</div>
+                        {% endif %}
+                        {% if field.name == 'role' %}
+                            <div id="roleHelpText" class="form-text text-muted mt-1"></div>
+                            <a href="{% url 'users:role_help' %}" target="_blank" class="small">Что означают роли?</a>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Сохранить</button>
+                <a href="{% url 'users:user_list' %}" class="btn btn-outline-secondary">Отмена</a>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    const roleDescriptions = {
+        'ADMIN': '🔹 Администратор — полный доступ ко всем функциям системы: управление пользователями, группами, договорами, отчётами, настройками.',
+        'MANAGER': '🔹 Менеджер — может создавать и редактировать договоры, просматривать отчёты, управлять заявками, но не может изменять роли других пользователей.',
+        'VIEWER': '🔹 Наблюдатель — только просмотр договоров, отчётов и заявок. Не может создавать, редактировать или удалять.',
+        'CONTRACTOR': '🔹 Исполнитель — доступ только к своим договорам (по полю "исполнитель" или контактное лицо). Может просматривать и добавлять отчёты по выполнению.'
+    };
+    document.addEventListener('DOMContentLoaded', function() {
+        const roleSelect = document.querySelector('select[name="role"]');
+        const roleHelpDiv = document.getElementById('roleHelpText');
+        if (roleSelect && roleHelpDiv) {
+            function updateRoleDescription() {
+                const selected = roleSelect.value;
+                roleHelpDiv.innerHTML = roleDescriptions[selected] || '';
+            }
+            roleSelect.addEventListener('change', updateRoleDescription);
+            updateRoleDescription();
+        }
+    });
+</script>
+{% endblock %}

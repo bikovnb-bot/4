@@ -1,46 +1,19 @@
 {% extends "base.html" %}
+{% load custom_filters %}
 
 {% block title %}Удаление пользователя{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header bg-danger text-white">
-                    <h3 class="mb-0">
-                        <i class="bi bi-exclamation-triangle"></i> Подтверждение удаления
-                    </h3>
-                </div>
-                <div class="card-body">
-                    <p class="lead">
-                        Вы уверены, что хотите удалить пользователя 
-                        <strong>{{ user.get_full_name|default:user.username }}</strong>?
-                    </p>
-                    <p class="text-muted">
-                        Логин: <strong>{{ user.username }}</strong><br>
-                        Email: <strong>{{ user.email }}</strong><br>
-                        Роль: <strong>{{ user.profile.get_role_display }}</strong>
-                    </p>
-                    
-                    <div class="alert alert-warning">
-                        <i class="bi bi-info-circle"></i>
-                        Это действие нельзя отменить. Все данные, связанные с пользователем, будут удалены.
-                    </div>
-                    
-                    <form method="post">
-                        {% csrf_token %}
-                        <div class="d-flex justify-content-between">
-                            <a href="{% url 'users:user_list' %}" class="btn btn-secondary">
-                                <i class="bi bi-x-circle"></i> Отмена
-                            </a>
-                            <button type="submit" class="btn btn-danger">
-                                <i class="bi bi-trash"></i> Да, удалить
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h3>Вы уверены, что хотите удалить пользователя "{{ user.username }}"?</h3>
+            <p class="text-danger"><i class="bi bi-exclamation-triangle"></i> Это действие нельзя отменить.</p>
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger">Удалить</button>
+                <a href="{% url 'users:user_list' %}" class="btn btn-outline-secondary">Отмена</a>
+            </form>
         </div>
     </div>
 </div>

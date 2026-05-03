@@ -2,64 +2,53 @@ from django import forms
 from django.contrib.auth.models import User
 from django.forms import inlineformset_factory
 from .models import ServiceRequest, RequestFile, RequestType, UsedMaterial, Material
-from .utils import can_assign_request
 from buildings.models import Building
 
 
-class CustomUserChoiceField(forms.ModelChoiceField):
-    """Поле выбора пользователя, отображающее полное имя или username"""
-    def label_from_instance(self, obj):
-        return obj.get_full_name() or obj.username
-
-
 class ServiceRequestForm(forms.ModelForm):
-    assigned_to = CustomUserChoiceField(
-        queryset=User.objects.filter(is_active=True),
+    """Упрощённая форма создания/редактирования заявки (только основные поля)"""
+    planned_date = forms.DateField(
         required=False,
-        label="Ответственный"
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        label='Плановая дата выполнения'
     )
 
     class Meta:
         model = ServiceRequest
         fields = [
-            'building', 'room_number', 'request_type', 'description',
-            'priority', 'assigned_to', 'planned_date', 'comment', 'status',
-            'track_time', 'time_spent'
+            'building',
+            'room_number',
+            'request_type',
+            'description',
+            'priority',
+            'planned_date',
         ]
         widgets = {
-            'description': forms.Textarea(attrs={'rows': 4, 'class': 'form-control'}),
+            'building': forms.Select(attrs={'class': 'form-select'}),
+            'room_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Например, 117'}),
+            'request_type': forms.Select(attrs={'class': 'form-select'}),
+            'description': forms.Textarea(attrs={'rows': 4, 'class': 'form-control', 'placeholder': 'Опишите проблему...'}),
+            'priority': forms.Select(attrs={'class': 'form-select'}),
             'planned_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
-            'room_number': forms.TextInput(attrs={'class': 'form-control'}),
-            'track_time': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'time_spent': forms.NumberInput(attrs={'class': 'form-control', 'step': '1', 'min': '0'}),
         }
         labels = {
-            'track_time': 'Учитывать время выполнения',
-            'time_spent': 'Затраченное время (минуты)',
-        }
-        help_texts = {
-            'time_spent': 'Укажите время в минутах, например: 30, 120.',
+            'building': 'Здание',
+            'room_number': 'Номер помещения',
+            'request_type': 'Тип заявки',
+            'description': 'Описание',
+            'priority': 'Приоритет',
+            'planned_date': 'Плановая дата',
         }
 
     def __init__(self, user, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if not can_assign_request(user):
-            self.fields.pop('assigned_to', None)
-        else:
-            self.fields['assigned_to'].queryset = User.objects.filter(is_active=True)
-
         self.fields['request_type'].queryset = RequestType.objects.filter(is_active=True)
-
-    def clean(self):
-        cleaned_data = super().clean()
-        track_time = cleaned_data.get('track_time')
-        time_spent = cleaned_data.get('time_spent')
-        if track_time and not time_spent:
-            self.add_error('time_spent', 'Поле обязательно, если учёт времени включён.')
-        return cleaned_data
+        # Если в будущем у Building появится is_active, можно раскомментировать:
+        # self.fields['building'].queryset = Building.objects.filter(is_active=True)
 
 
 class RequestFileForm(forms.ModelForm):
+    """Форма для загрузки файлов к заявке"""
     class Meta:
         model = RequestFile
         fields = ['file']
@@ -68,19 +57,29 @@ class RequestFileForm(forms.ModelForm):
         }
 
 
-# Формсет для материалов (используется при закрытии заявки)
+# Формсет для материалов (используется при закрытии заявки и в деталях)
+class UsedMaterialForm(forms.ModelForm):
+    class Meta:
+        model = UsedMaterial
+        fields = ['material', 'quantity', 'unit', 'price_per_unit']
+        widgets = {
+            'material': forms.Select(attrs={'class': 'form-select'}),
+            'quantity': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'unit': forms.TextInput(attrs={'class': 'form-control'}),
+            'price_per_unit': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['material'].queryset = Material.objects.all()
+        self.fields['material'].label_from_instance = lambda obj: f"{obj.name} ({obj.unit})"
+
 UsedMaterialFormSet = inlineformset_factory(
     ServiceRequest,
     UsedMaterial,
-    fields=('name', 'quantity', 'unit', 'price_per_unit'),
+    form=UsedMaterialForm,
     extra=3,
     can_delete=True,
-    widgets={
-        'name': forms.TextInput(attrs={'class': 'form-control', 'list': 'materials-list'}),
-        'quantity': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-        'unit': forms.TextInput(attrs={'class': 'form-control'}),
-        'price_per_unit': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-    }
 )
 
 
@@ -111,8 +110,8 @@ class ReportForm(forms.Form):
     priority = forms.ChoiceField(choices=[('', 'Все')] + ServiceRequest.PRIORITY_CHOICES, required=False, label="Приоритет")
     building = forms.ModelChoiceField(queryset=Building.objects.all(), required=False, label="Здание")
     request_type = forms.ModelChoiceField(queryset=RequestType.objects.filter(is_active=True), required=False, label="Тип заявки")
-    assigned_to = CustomUserChoiceField(queryset=User.objects.filter(is_active=True), required=False, label="Ответственный")
-    created_by = CustomUserChoiceField(queryset=User.objects.filter(is_active=True), required=False, label="Создатель")
+    assigned_to = forms.ModelChoiceField(queryset=User.objects.filter(is_active=True), required=False, label="Ответственный")
+    created_by = forms.ModelChoiceField(queryset=User.objects.filter(is_active=True), required=False, label="Создатель")
     room_number = forms.CharField(required=False, label="Номер помещения")
     date_from = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}), label="Дата создания от")
     date_to = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}), label="Дата создания до")
@@ -120,4 +119,23 @@ class ReportForm(forms.Form):
 
 # Форма для импорта материалов из Excel
 class ImportMaterialsForm(forms.Form):
-    excel_file = forms.FileField(label="Excel файл")
+    excel_file = forms.FileField(label="Excel файл", widget=forms.FileInput(attrs={'class': 'form-control'}))
+
+
+# Форма для добавления/редактирования материалов на складе
+class MaterialForm(forms.ModelForm):
+    class Meta:
+        model = Material
+        fields = ['name', 'unit', 'default_price', 'quantity_in_stock']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'unit': forms.TextInput(attrs={'class': 'form-control'}),
+            'default_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'quantity_in_stock': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+        }
+        labels = {
+            'name': 'Наименование',
+            'unit': 'Единица измерения',
+            'default_price': 'Цена за единицу (₽)',
+            'quantity_in_stock': 'Количество на складе',
+        }

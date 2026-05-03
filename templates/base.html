@@ -1,67 +1,27 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Учёт эксплуатации зданий{% endblock %}</title>
+    
+    <!-- PWA: манифест, иконки, темы -->
+    <link rel="manifest" href="{% static 'manifest.json' %}">
+    <meta name="theme-color" content="#0d6efd">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Заявки">
+    <!-- Конец PWA -->
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <!-- flatpickr CSS и JS -->
+    <!-- Глобальные кастомные стили проекта (вынесены в отдельный файл) -->
+    <link rel="stylesheet" href="{% static 'css/custom.css' %}">
+    <!-- flatpickr CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ru.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <style>
-        body {
-            background-color: #f8f9fa;
-        }
-        .footer {
-            margin-top: 3rem;
-            padding: 1.5rem 0;
-            background-color: #e9ecef;
-            text-align: center;
-        }
-        .btn-outline-danger {
-            transition: all 0.3s ease;
-        }
-        .btn-outline-danger:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
-        }
-        .user-profile-link {
-            transition: opacity 0.2s ease;
-        }
-        .user-profile-link:hover {
-            opacity: 0.8;
-            text-decoration: underline !important;
-        }
-        
-        /* Стили для правильного отображения подписей над полями в модальных окнах */
-        .modal-body label {
-            display: block;
-            margin-bottom: 0.25rem;
-            font-weight: 500;
-        }
-        
-        /* Дополнительные стили для полей ввода в модальных окнах */
-        .modal-body .form-control,
-        .modal-body .form-select {
-            width: 100%;
-        }
-
-        /* Небольшое улучшение для flatpickr на тёмном фоне (опционально) */
-        .flatpickr-calendar {
-            font-size: 0.9rem;
-        }
-        
-        /* Анимация для исчезновения сообщений */
-        .alert {
-            transition: opacity 0.5s ease;
-        }
-        .alert.fade-out {
-            opacity: 0;
-        }
-    </style>
+    <!-- Дополнительные CSS-блоки для конкретных страниц -->
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
@@ -75,13 +35,19 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'core:home' %}">
+                        <a class="nav-link {% if request.resolver_match.app_name == 'core' and request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'core:home' %}">
                             <i class="bi bi-house"></i> Главная
+                        </a>
+                    </li>
+                    <!-- Дашборд -->
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.app_name == 'exploitation_app' and request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'exploitation_app:dashboard' %}">
+                            <i class="bi bi-speedometer2"></i> Дашборд
                         </a>
                     </li>
                     <!-- Договоры (выпадающее меню) -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="contractsDropdown" role="button" data-bs-toggle="dropdown">
+                        <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'exploitation_app' and request.resolver_match.url_name != 'dashboard' %}active{% endif %}" href="#" id="contractsDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-file-text"></i> Договоры
                         </a>
                         <ul class="dropdown-menu">
@@ -93,7 +59,7 @@
                     </li>
                     <!-- Приборы учёта (выпадающее меню) -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="energyDropdown" role="button" data-bs-toggle="dropdown">
+                        <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'energy' %}active{% endif %}" href="#" id="energyDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-battery-charging"></i> Приборы учёта
                         </a>
                         <ul class="dropdown-menu">
@@ -107,7 +73,7 @@
                     </li>
                     <!-- Заявки (выпадающее меню) -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="requestsDropdown" role="button" data-bs-toggle="dropdown">
+                        <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'requests_app' %}active{% endif %}" href="#" id="requestsDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-clipboard"></i> Заявки
                         </a>
                         <ul class="dropdown-menu">
@@ -122,7 +88,7 @@
                     <!-- Администрирование (выпадающее меню, только для определённых ролей) -->
                     {% if is_admin or user.is_staff %}
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
+                        <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'users' %}active{% endif %}" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-gear"></i> Администрирование
                         </a>
                         <ul class="dropdown-menu">
@@ -191,16 +157,21 @@
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ru.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            flatpickr(".datepicker", {
+            // Инициализация datepicker для всех полей с классом datepicker или полей дат по атрибутам
+            flatpickr(".datepicker, input[type='date'], input[name$='_date'], input[id$='_date']", {
                 dateFormat: "d.m.Y",
                 locale: "ru",
                 allowInput: true,
                 altInput: false
             });
             
+            // Автоматическое исчезновение сообщений через 5 секунд
             const alerts = document.querySelectorAll('.alert');
             alerts.forEach(function(alert) {
                 setTimeout(function() {
@@ -210,7 +181,22 @@
                     }, 500);
                 }, 5000);
             });
+
+            // Инициализация всплывающих подсказок Bootstrap (tooltips)
+            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.forEach(function(tooltipTriggerEl) {
+                new bootstrap.Tooltip(tooltipTriggerEl);
+            });
         });
+    </script>
+    
+    <!-- PWA: регистрация Service Worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('{% static 'js/sw.js' %}')
+                .then(reg => console.log('✅ Service Worker зарегистрирован', reg))
+                .catch(err => console.log('❌ Ошибка регистрации Service Worker', err));
+        }
     </script>
     
     {% block extra_js %}{% endblock %}
