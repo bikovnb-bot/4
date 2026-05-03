@@ -1,0 +1,21 @@
+{
+  "name": "Учёт эксплуатации зданий — Заявки",
+  "short_name": "Заявки",
+  "description": "Мобильное приложение для управления заявками",
+  "start_url": "/requests/",
+  "display": "standalone",
+  "display_override": ["standalone", "window-controls-overlay"],
+  "theme_color": "#0d6efd",
+  "background_color": "#ffffff",
+  "orientation": "portrait-primary",
+  "form_factor": {
+    "wide": { "preferred_related_applications": false }
+  },
+  "icons": [
+    { "src": "/static/icons/icon-72.png", "sizes": "72x72", "type": "image/png" },
+    { "src": "/static/icons/icon-96.png", "sizes": "96x96", "type": "image/png" },
+    { "src": "/static/icons/icon-144.png", "sizes": "144x144", "type": "image/png" },
+    { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
