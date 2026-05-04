@@ -5,26 +5,57 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Учёт эксплуатации зданий{% endblock %}</title>
-    
-    <!-- PWA: манифест, иконки, темы -->
-    <link rel="manifest" href="{% static 'manifest.json' %}">
-    <meta name="theme-color" content="#0d6efd">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Заявки">
-    <!-- Конец PWA -->
-
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <!-- Глобальные кастомные стили проекта (вынесены в отдельный файл) -->
     <link rel="stylesheet" href="{% static 'css/custom.css' %}">
     <!-- flatpickr CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <!-- PWA манифест и мета-теги -->
+    <link rel="manifest" href="{% static 'manifest.json' %}">
+    <meta name="theme-color" content="#0d6efd">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Заявки">
     <!-- Дополнительные CSS-блоки для конкретных страниц -->
     {% block extra_css %}{% endblock %}
+
+    <!-- Глобальные стили: прижатие футера и фиксация навигации -->
+    <style>
+        /* Общие настройки */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            padding-top: 70px; /* отступ под фиксированную навигацию */
+        }
+        /* Основной контент растягивается, футер прижимается к низу */
+        main {
+            flex: 1 0 auto;
+        }
+        footer {
+            flex-shrink: 0;
+            margin-top: auto;
+            background-color: #e9ecef;
+            text-align: center;
+            padding: 1rem 0;
+        }
+        /* Адаптив для мобильных устройств (меньшая высота панели) */
+        @media (max-width: 768px) {
+            body {
+                padding-top: 56px;
+            }
+        }
+    </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <!-- Навигационная панель светлая, фиксированная -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light fixed-top">
         <div class="container">
             <a class="navbar-brand" href="{% url 'core:home' %}">
                 🏢 Эксплуатация зданий
@@ -105,7 +136,7 @@
                 <div class="d-flex align-items-center">
                     {% if user.is_authenticated %}
                         <div class="dropdown">
-                            <a href="#" class="navbar-text me-3 text-light text-decoration-none dropdown-toggle user-profile-link" 
+                            <a href="#" class="navbar-text me-3 text-dark text-decoration-none dropdown-toggle user-profile-link" 
                                data-bs-toggle="dropdown" aria-expanded="false">
                                 👤 {{ user.get_full_name|default:user.username }}
                             </a>
@@ -127,7 +158,7 @@
                             </ul>
                         </div>
                     {% else %}
-                        <a href="{% url 'login' %}" class="btn btn-outline-light btn-sm">
+                        <a href="{% url 'login' %}" class="btn btn-outline-primary btn-sm">
                             🔑 Войти
                         </a>
                     {% endif %}
@@ -150,7 +181,7 @@
         {% endblock %}
     </main>
 
-    <footer class="footer">
+    <footer>
         <div class="container">
             <span class="text-muted">© {% now "Y" %} Система учёта эксплуатации зданий</span>
         </div>
@@ -189,14 +220,111 @@
             });
         });
     </script>
-    
-    <!-- PWA: регистрация Service Worker -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('{% static 'js/sw.js' %}')
-                .then(reg => console.log('✅ Service Worker зарегистрирован', reg))
-                .catch(err => console.log('❌ Ошибка регистрации Service Worker', err));
+
+    <!-- PWA: кнопка установки приложения с сохранением состояния -->
+    <style>
+        #pwaInstallBtn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            background-color: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 12px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            display: none;
+            font-weight: 500;
+            transition: all 0.2s;
         }
+        #pwaInstallBtn:hover {
+            background-color: #0b5ed7;
+            transform: scale(1.02);
+        }
+    </style>
+    <button id="pwaInstallBtn">📱 Установить приложение</button>
+
+    <script>
+        (function() {
+            const STORAGE_KEY = 'pwaInstallButtonHidden';
+            let deferredPrompt;
+            const installBtn = document.getElementById('pwaInstallBtn');
+            let timerId = null;
+
+            // Функция скрытия кнопки и сохранения состояния
+            function hideInstallButton() {
+                if (installBtn) installBtn.style.display = 'none';
+                if (timerId) clearTimeout(timerId);
+                // Сохраняем флаг в localStorage, чтобы при следующих переходах кнопка не появлялась
+                try {
+                    localStorage.setItem(STORAGE_KEY, 'true');
+                } catch(e) {}
+            }
+
+            // Проверяем, была ли кнопка уже скрыта ранее
+            let isHidden = false;
+            try {
+                isHidden = localStorage.getItem(STORAGE_KEY) === 'true';
+            } catch(e) {}
+            if (isHidden) {
+                // Если уже скрыта, сразу прячем и отключаем обработку
+                if (installBtn) installBtn.style.display = 'none';
+                // Всё равно слушаем beforeinstallprompt, но не показываем
+                window.addEventListener('beforeinstallprompt', (e) => {
+                    e.preventDefault();
+                    deferredPrompt = e;
+                    // Не показываем кнопку
+                });
+            } else {
+                // Кнопка ещё не скрыта, настраиваем логику
+                window.addEventListener('beforeinstallprompt', (e) => {
+                    console.log('✅ PWA ready for install');
+                    e.preventDefault();
+                    deferredPrompt = e;
+                    // Показываем кнопку, только если ещё не скрыта (повторная проверка на всякий случай)
+                    if (!localStorage.getItem(STORAGE_KEY)) {
+                        installBtn.style.display = 'block';
+                        // Таймер на 1 минуту
+                        if (timerId) clearTimeout(timerId);
+                        timerId = setTimeout(() => {
+                            console.log('⏰ Кнопка установки скрыта по таймеру (1 минута)');
+                            hideInstallButton();
+                        }, 60000);
+                    }
+                });
+
+                window.addEventListener('appinstalled', () => {
+                    console.log('✅ PWA установлено, скрываем кнопку');
+                    hideInstallButton();
+                    deferredPrompt = null;
+                });
+
+                if (installBtn) {
+                    installBtn.addEventListener('click', () => {
+                        if (deferredPrompt) {
+                            deferredPrompt.prompt();
+                            deferredPrompt.userChoice.then((choiceResult) => {
+                                if (choiceResult.outcome === 'accepted') {
+                                    console.log('✅ User installed PWA');
+                                    hideInstallButton();
+                                } else {
+                                    console.log('❌ User dismissed install');
+                                    // Если пользователь отклонил установку, можно тоже скрыть кнопку
+                                    // По желанию закомментировать следующую строку, чтобы кнопка оставалась
+                                    hideInstallButton();
+                                }
+                                deferredPrompt = null;
+                            });
+                        }
+                        // Скрываем кнопку сразу после клика
+                        hideInstallButton();
+                    });
+                }
+            }
+        })();
     </script>
     
     {% block extra_js %}{% endblock %}

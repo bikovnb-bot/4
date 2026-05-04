@@ -35,7 +35,7 @@
 
     <form method="post">
         {% csrf_token %}
-        <h4>Использованные материалы</h4>
+        <h4>Использованные материалы (необязательно)</h4>
 
         <datalist id="materials-list">
             {% for material in materials %}
@@ -88,13 +88,13 @@
                 <input type="hidden" name="material_id[]" class="material-id-hidden" value="${materialId}">
             </td>
             <td>
-                <input type="number" step="0.01" name="material_quantity[]" class="form-control material-quantity" value="${quantity}" required>
+                <input type="number" step="0.01" name="material_quantity[]" class="form-control material-quantity" value="${quantity}">
             </td>
             <td>
-                <input type="text" name="material_unit[]" class="form-control material-unit" value="${unit}" required>
+                <input type="text" name="material_unit[]" class="form-control material-unit" value="${unit}">
             </td>
             <td>
-                <input type="number" step="0.01" name="material_price[]" class="form-control material-price" value="${price}" required>
+                <input type="number" step="0.01" name="material_price[]" class="form-control material-price" value="${price}">
             </td>
             <td class="text-center">
                 <button type="button" class="btn btn-danger btn-sm remove-row" title="Удалить">
@@ -112,7 +112,6 @@
 
         function updateMaterialData() {
             const inputName = nameInput.value;
-            // Ищем материал по имени (можно улучшить, но для демонстрации)
             const material = materialsData.find(m => m.name === inputName);
             if (material) {
                 idHidden.value = material.id;
@@ -125,7 +124,6 @@
             }
         }
 
-        // При изменении названия или выборе из списка
         nameInput.addEventListener('change', updateMaterialData);
         nameInput.addEventListener('input', function() {
             if (this.value === '') {
@@ -148,7 +146,7 @@
         });
     }
 
-    addMaterialRow(); // первая пустая строка
+    addMaterialRow();
     document.getElementById('add-material-btn').addEventListener('click', () => addMaterialRow());
 </script>
 {% endblock %}

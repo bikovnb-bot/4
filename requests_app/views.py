@@ -12,7 +12,7 @@ from django.core.paginator import Paginator
 from datetime import datetime
 import openpyxl
 
-from .models import ServiceRequest, UsedMaterial, Material, RequestType
+from .models import ServiceRequest, UsedMaterial, Material, RequestType, RequestHistory
 from .forms import (
     ServiceRequestForm, UsedMaterialFormSet, ReportForm,
     ImportMaterialsForm, MaterialForm
@@ -58,7 +58,6 @@ def request_list(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # Все активные пользователи для модального окна назначения
     all_users = User.objects.filter(is_active=True).values(
         'id', 'username', 'first_name', 'last_name'
     ).order_by('username')
@@ -88,6 +87,11 @@ def request_create(request):
             req.status = 'new'
             req.created_at = timezone.now()
             req.save()
+            RequestHistory.objects.create(
+                request=req,
+                user=request.user,
+                action=f'Создана заявка №{req.request_number}',
+            )
             messages.success(request, f'Заявка {req.request_number} успешно создана.')
             return redirect('requests_app:request_detail', pk=req.pk)
     else:
@@ -105,7 +109,6 @@ def request_edit(request, pk):
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else None
 
-    # Закрытая заявка – только администратор
     if req.status == 'closed' and role != UserRole.ADMIN:
         messages.error(request, 'Только администратор может редактировать закрытую заявку.')
         return redirect('requests_app:request_detail', pk=pk)
@@ -119,6 +122,11 @@ def request_edit(request, pk):
         if form.is_valid():
             req = form.save(commit=False)
             req.save()
+            RequestHistory.objects.create(
+                request=req,
+                user=request.user,
+                action='Заявка отредактирована',
+            )
             messages.success(request, 'Заявка обновлена.')
             return redirect('requests_app:request_detail', pk=req.pk)
     else:
@@ -148,13 +156,14 @@ def request_detail(request, pk):
 
     materials_formset = UsedMaterialFormSet(instance=req)
 
-    # Права на действия (для кнопок внизу – не используются больше, но оставлены для совместимости)
     can_assign = role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER] and req.status in ['new', 'in_progress']
     can_mark_completed = (req.assigned_to == user or role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]) and req.status == 'in_progress'
     can_suspend = (req.assigned_to == user or role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]) and req.status == 'in_progress'
     can_resume = role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER] and req.status == 'suspended'
     can_close = role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER] and req.status == 'completed'
     can_edit = (role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER] or req.created_by == user) and not (req.status == 'closed' and role != UserRole.ADMIN)
+
+    history = req.history.all()[:30]
 
     context = {
         'req': req,
@@ -167,7 +176,7 @@ def request_detail(request, pk):
         'can_close': can_close,
         'can_edit': can_edit,
         'attachments': [],
-        'history': [],
+        'history': history,
     }
     return render(request, 'requests_app/request_detail.html', context)
 
@@ -183,6 +192,11 @@ def request_delete(request, pk):
         return redirect('requests_app:request_list')
 
     if request.method == 'POST':
+        RequestHistory.objects.create(
+            request=req,
+            user=request.user,
+            action='Заявка удалена',
+        )
         req.delete()
         messages.success(request, f'Заявка {req.request_number} удалена.')
         return redirect('requests_app:request_list')
@@ -196,7 +210,6 @@ def request_assign(request, pk):
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else None
 
-    # Администратору разрешено всегда
     if role != UserRole.ADMIN:
         if role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER] or req.status not in ['new', 'in_progress']:
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -211,6 +224,12 @@ def request_assign(request, pk):
             if req.status == 'new':
                 req.status = 'in_progress'
             req.save()
+            executor_name = req.assigned_to.get_full_name() or req.assigned_to.username
+            RequestHistory.objects.create(
+                request=req,
+                user=request.user,
+                action=f'Назначен исполнитель: {executor_name}',
+            )
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse({'success': True, 'message': 'Исполнитель назначен'})
             messages.success(request, 'Исполнитель назначен.')
@@ -241,6 +260,11 @@ def request_mark_completed(request, pk):
         req.status = 'completed'
         req.completed_date = timezone.now()
         req.save()
+        RequestHistory.objects.create(
+            request=req,
+            user=request.user,
+            action='Заявка отмечена как выполненная',
+        )
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({'success': True, 'message': 'Заявка отмечена выполненной'})
         messages.success(request, 'Заявка выполнена.')
@@ -272,6 +296,11 @@ def request_suspend(request, pk):
             req.status = 'suspended'
             req.suspension_reason = reason
             req.save()
+            RequestHistory.objects.create(
+                request=req,
+                user=request.user,
+                action=f'Заявка приостановлена. Причина: {reason}',
+            )
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse({'success': True, 'message': 'Заявка приостановлена'})
             messages.success(request, f'Заявка №{req.request_number} приостановлена.')
@@ -296,6 +325,11 @@ def request_resume(request, pk):
     if request.method == 'POST':
         req.status = 'in_progress'
         req.save()
+        RequestHistory.objects.create(
+            request=req,
+            user=request.user,
+            action='Заявка возобновлена',
+        )
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({'success': True, 'message': 'Заявка возобновлена'})
         messages.success(request, f'Заявка №{req.request_number} возобновлена.')
@@ -304,7 +338,6 @@ def request_resume(request, pk):
     return render(request, 'requests_app/request_resume.html', {'req': req})
 
 
-# ======================= ИСПРАВЛЕННАЯ ФУНКЦИЯ request_close =======================
 @login_required
 def request_close(request, pk):
     req = get_object_or_404(ServiceRequest, pk=pk)
@@ -328,29 +361,18 @@ def request_close(request, pk):
         units = request.POST.getlist('material_unit[]')
         prices = request.POST.getlist('material_price[]')
 
-        valid_rows = []
-        for idx in range(len(material_ids)):
-            mat_id = material_ids[idx].strip() if idx < len(material_ids) else ''
-            qty_str = quantities[idx].strip() if idx < len(quantities) else ''
-            unit = units[idx].strip() if idx < len(units) else ''
-            price_str = prices[idx].strip() if idx < len(prices) else ''
-
-            if not mat_id or not qty_str:
-                continue
-            try:
-                qty = Decimal(qty_str.replace(',', '.'))
-                if qty <= 0:
-                    continue
-            except (ValueError, TypeError):
-                continue
-            valid_rows.append((mat_id, qty, unit, price_str))
-
-        if not valid_rows:
-            messages.error(request, 'Добавьте хотя бы один материал с корректными данными.')
-            return redirect('requests_app:request_close', pk=req.pk)
-
+        # Собираем только те строки, где выбран материал и количество > 0
         with transaction.atomic():
-            for mat_id, qty, unit, price_str in valid_rows:
+            for mat_id, qty_str, unit, price_str in zip(material_ids, quantities, units, prices):
+                if not mat_id or not qty_str:
+                    continue
+                try:
+                    qty = Decimal(qty_str.replace(',', '.'))
+                    if qty <= 0:
+                        continue
+                except (ValueError, TypeError):
+                    continue
+                # Если материал указан и количество корректное, списываем
                 try:
                     material = Material.objects.get(pk=int(mat_id))
                 except (Material.DoesNotExist, ValueError, TypeError):
@@ -374,12 +396,18 @@ def request_close(request, pk):
 
         req.status = 'closed'
         req.save()
-        messages.success(request, f'Заявка #{req.request_number} закрыта, материалы списаны.')
+        # Запись в историю (если используется)
+        RequestHistory.objects.create(
+            request=req,
+            user=request.user,
+            action='Заявка закрыта' + (' (с материалами)' if any(mat_id for mat_id in material_ids) else ' (без материалов)')
+        )
+        messages.success(request, f'Заявка #{req.request_number} закрыта.')
         return redirect('requests_app:request_detail', pk=req.pk)
 
-    # GET — подготовка данных для формы (передаём список с id, name, unit, price)
+    # GET – подготовка формы
     materials_qs = Material.objects.all().values('id', 'name', 'unit', 'default_price')
-    materials_json = json.dumps(list(materials_qs), default=str)  # Decimal → str
+    materials_json = json.dumps(list(materials_qs), default=str)
     context = {
         'request_obj': req,
         'req': req,
@@ -387,9 +415,9 @@ def request_close(request, pk):
         'materials_json': materials_json,
     }
     return render(request, 'requests_app/request_close.html', context)
-# =====================================================================
 
 
+# ---------- Остальные представления (дашборд, экспорт, отчёты, материалы) ----------
 @login_required
 def request_dashboard(request):
     user = request.user
@@ -529,7 +557,6 @@ def custom_report(request):
     return render(request, 'requests_app/custom_report.html', context)
 
 
-# ---------- Материалы и импорт/экспорт ----------
 @login_required
 def import_materials(request):
     if request.method == 'POST' and request.FILES.get('excel_file'):
@@ -663,9 +690,9 @@ def material_stock_export(request):
     wb.save(response)
     return response
 
+
 @login_required
 def material_add(request):
-    # Проверяем, имеет ли пользователь права (ADMIN, MANAGER, DISPATCHER)
     role = request.user.profile.role if hasattr(request.user, 'profile') else None
     if role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]:
         messages.error(request, 'Нет прав для добавления материалов.')
@@ -680,6 +707,7 @@ def material_add(request):
     else:
         form = MaterialForm()
     return render(request, 'requests_app/material_form.html', {'form': form, 'title': 'Добавить материал'})
+
 
 @login_required
 def material_edit(request, pk):
@@ -701,3 +729,34 @@ def material_edit(request, pk):
     else:
         form = MaterialForm(instance=material)
     return render(request, 'requests_app/material_form.html', {'form': form, 'title': 'Редактировать материал'})
+
+@login_required
+def material_delete(request, pk):
+    material = get_object_or_404(Material, pk=pk)
+    user = request.user
+    role = user.profile.role if hasattr(user, 'profile') else None
+    if role not in (UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER):
+        messages.error(request, 'Нет прав для удаления материала.')
+        return redirect('requests_app:material_stock')
+    
+    if request.method == 'POST':
+        name = material.name
+        material.delete()
+        messages.success(request, f'Материал "{name}" удалён.')
+        return redirect('requests_app:material_stock')
+    
+    return render(request, 'requests_app/material_confirm_delete.html', {'material': material})
+
+from django.http import JsonResponse
+
+@login_required
+def material_delete_ajax(request, pk):
+    material = get_object_or_404(Material, pk=pk)
+    user = request.user
+    role = user.profile.role if hasattr(user, 'profile') else None
+    if role not in (UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER):
+        return JsonResponse({'success': False, 'error': 'Нет прав'}, status=403)
+    if request.method == 'POST':
+        material.delete()
+        return JsonResponse({'success': True})
+    return JsonResponse({'success': False, 'error': 'Метод не разрешён'}, status=405)

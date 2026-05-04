@@ -24,4 +24,6 @@ urlpatterns = [
     path('<int:pk>/delete/', views.request_delete, name='request_delete'),
     path('materials/add/', views.material_add, name='material_add'),
     path('materials/<int:pk>/edit/', views.material_edit, name='material_edit'),
+    path('materials/<int:pk>/delete/', views.material_delete, name='material_delete'),
+    path('materials/<int:pk>/delete-ajax/', views.material_delete_ajax, name='material_delete_ajax'),
 ]

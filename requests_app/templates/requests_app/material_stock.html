@@ -56,17 +56,20 @@
                 </thead>
                 <tbody>
                     {% for material in materials %}
-                    <tr class="text-center">
+                    <tr class="text-center" id="material-row-{{ material.id }}">
                         <td>{{ forloop.counter0|add:materials.start_index }}</td>
                         <td class="text-start">{{ material.name }}</td>
                         <td>{{ material.unit }}</td>
                         <td>{{ material.default_price|space_thousands }}</td>
                         <td><strong>{{ material.quantity_in_stock|floatformat:2 }}</strong> {{ material.unit }}</td>
                         {% if user_role in 'ADMIN,MANAGER,DISPATCHER' %}
-                            <td>
+                            <td class="text-center">
                                 <a href="{% url 'requests_app:material_edit' material.id %}" class="btn btn-sm btn-outline-primary" title="Редактировать">
                                     <i class="bi bi-pencil"></i>
                                 </a>
+                                <button class="btn btn-sm btn-outline-danger delete-material" data-id="{{ material.id }}" data-name="{{ material.name }}" title="Удалить">
+                                    <i class="bi bi-trash"></i>
+                                </button>
                             </td>
                         {% endif %}
                     </tr>
@@ -85,4 +88,41 @@
 
 <!-- Пагинация -->
 {% include 'pagination.html' with page_obj=materials %}
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const deleteButtons = document.querySelectorAll('.delete-material');
+        deleteButtons.forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                const materialId = this.dataset.id;
+                const materialName = this.dataset.name;
+                if (confirm(`Удалить материал "${materialName}"?`)) {
+                    fetch(`/requests/materials/${materialId}/delete-ajax/`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': '{{ csrf_token }}',
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const row = document.getElementById(`material-row-${materialId}`);
+                            if (row) row.remove();
+                            // Опционально: показать уведомление
+                            // alert('Материал удалён');
+                        } else {
+                            alert('Ошибка удаления: ' + (data.error || 'Неизвестная ошибка'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Ошибка:', error);
+                        alert('Ошибка соединения');
+                    });
+                }
+            });
+        });
+    });
+</script>
 {% endblock %}

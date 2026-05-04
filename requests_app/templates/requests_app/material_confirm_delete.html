@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Удалить материал{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-danger text-white">
+            <h4>Удаление материала</h4>
+        </div>
+        <div class="card-body">
+            <p>Вы уверены, что хотите удалить материал <strong>{{ material.name }}</strong>?</p>
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger">Удалить</button>
+                <a href="{% url 'requests_app:material_stock' %}" class="btn btn-secondary">Отмена</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

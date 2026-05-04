@@ -5,7 +5,6 @@
 
 {% block content %}
 <div class="container mt-4">
-    <!-- Верхняя панель: заголовок + кнопки К списку, Редактировать, Удалить -->
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
         <h2>📋 Заявка № {{ req.request_number }}</h2>
         <div class="d-flex gap-2">
@@ -25,7 +24,6 @@
     </div>
 
     <div class="row">
-        <!-- Левая колонка: основная информация -->
         <div class="col-md-8">
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-light">
@@ -35,21 +33,29 @@
                     <div class="row">
                         <div class="col-md-6">
                             <table class="table table-sm table-borderless">
-                                <tr><th style="width: 40%;">Статус</th>
-                                    <td><span class="badge 
-                                        {% if req.status == 'new' %}bg-secondary
-                                        {% elif req.status == 'in_progress' %}bg-primary
-                                        {% elif req.status == 'completed' %}bg-success
-                                        {% elif req.status == 'closed' %}bg-dark
-                                        {% elif req.status == 'suspended' %}bg-warning text-dark
-                                        {% endif %}">
-                                        {{ req.get_status_display }}
-                                    </span>
+                                <tr>
+                                    <th style="width: 40%;">Статус</th>
+                                    <td>
+                                        <span class="badge 
+                                            {% if req.status == 'new' %}bg-secondary
+                                            {% elif req.status == 'in_progress' %}bg-primary
+                                            {% elif req.status == 'completed' %}bg-success
+                                            {% elif req.status == 'closed' %}bg-dark
+                                            {% elif req.status == 'suspended' %}bg-warning text-dark
+                                            {% endif %}">
+                                            {{ req.get_status_display }}
+                                        </span>
+                                    </td>
                                 </tr>
                                 <tr><th>Приоритет</th>
-                                    <td>{% if req.priority == 'high' %}<span class="badge bg-danger">Высокий</span>
-                                        {% elif req.priority == 'medium' %}<span class="badge bg-warning text-dark">Средний</span>
-                                        {% else %}<span class="badge bg-info">Низкий</span>{% endif %}
+                                    <td>
+                                        {% if req.priority == 'high' %}
+                                            <span class="badge bg-danger">Высокий</span>
+                                        {% elif req.priority == 'medium' %}
+                                            <span class="badge bg-warning text-dark">Средний</span>
+                                        {% else %}
+                                            <span class="badge bg-info">Низкий</span>
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 <tr><th>Здание</th><td>{{ req.building.name|default:req.building.address|default:"—" }}</td>
@@ -59,8 +65,24 @@
                         </div>
                         <div class="col-md-6">
                             <table class="table table-sm table-borderless">
-                                <tr><th>Создатель</th><td>{{ req.created_by.get_full_name|default:req.created_by.username|default:"—" }}</td>
-                                <tr><th>Ответственный</th><td>{{ req.assigned_to.get_full_name|default:req.assigned_to.username|default:"—" }}</td>
+                                <tr><th>Создатель</th>
+                                    <td>
+                                        {% if req.created_by %}
+                                            {{ req.created_by.get_full_name|default:req.created_by.username }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr><th>Ответственный</th>
+                                    <td>
+                                        {% if req.assigned_to %}
+                                            {{ req.assigned_to.get_full_name|default:req.assigned_to.username }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </td>
+                                </tr>
                                 <tr><th>Плановая дата</th><td>{{ req.planned_date|date:"d.m.Y"|default:"—" }}</td>
                                 <tr><th>Дата выполнения</th><td>{{ req.completed_date|date:"d.m.Y H:i"|default:"—" }}</td>
                                 <tr><th>Дата создания</th><td>{{ req.created_at|date:"d.m.Y H:i" }}</td>
@@ -84,8 +106,8 @@
             </div>
         </div>
 
-        <!-- Правая колонка: вложения и история (заглушки) -->
         <div class="col-md-4">
+            <!-- Блок вложений (заглушка) -->
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-light">
                     <h5 class="mb-0"><i class="bi bi-paperclip me-2"></i>Вложения</h5>
@@ -94,12 +116,28 @@
                     <p class="text-muted mb-0">Файлы не прикреплены</p>
                 </div>
             </div>
+
+            <!-- Блок истории изменений -->
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-light">
-                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>История</h5>
+                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>История изменений</h5>
                 </div>
-                <div class="card-body text-center">
-                    <p class="text-muted mb-0">История изменений не ведётся</p>
+                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                    {% if history %}
+                        <ul class="list-unstyled mb-0">
+                            {% for h in history %}
+                                <li class="mb-2 pb-2 border-bottom">
+                                    <small class="text-muted">{{ h.created_at|date:"d.m.Y H:i" }}</small>
+                                    {% if h.user %}
+                                        <span class="badge bg-secondary ms-1">{{ h.user.get_full_name|default:h.user.username }}</span>
+                                    {% endif %}
+                                    <div class="mt-1">{{ h.action|linebreaksbr }}</div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted mb-0 text-center">Нет записей</p>
+                    {% endif %}
                 </div>
             </div>
         </div>

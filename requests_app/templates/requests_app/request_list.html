@@ -86,7 +86,12 @@
                         {% for req in requests %}
                         <tr id="row-{{ req.id }}">
                             <td class="text-center">
-                                <a href="{% url 'requests_app:request_detail' req.id %}" class="fw-semibold text-decoration-none">
+                                <a href="{% url 'requests_app:request_detail' req.id %}" 
+                                   class="fw-semibold text-decoration-none"
+                                   title="{{ req.description|escape }}"
+                                   data-bs-toggle="tooltip"
+                                   data-bs-html="true"
+                                   data-bs-placement="top">
                                     {{ req.request_number }}
                                 </a>
                             </td>
@@ -146,7 +151,9 @@
                             </td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="9" class="text-muted text-center">Нет заявок</td></tr>
+                        <tr>
+                            <td colspan="9" class="text-muted text-center">Нет заявок</td>
+                        </tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -195,8 +202,8 @@
         <a href="#" class="menu-item" data-action="resume"><i class="bi bi-play-circle me-2"></i> Возобновить</a>
     </div>
     <div id="menu-close" style="display: none;">
-        <a href="#" class="menu-item" data-action="close"><i class="bi bi-check2-circle me-2"></i> Закрыть заявку (с материалами)</a>
-    </div>
+    <a href="#" class="menu-item" data-action="close"><i class="bi bi-check2-circle me-2"></i> Закрыть заявку</a>
+</div>
 </div>
 
 <!-- Модальное окно для выбора исполнителя -->
@@ -249,7 +256,6 @@
 
         // Функция доступных действий
         function getAvailableActions(status, assignedTo) {
-            // Администратор видит все действия для любой заявки
             if (userRole === 'ADMIN') {
                 return ['assign', 'mark-completed', 'suspend', 'resume', 'close'];
             }
@@ -257,7 +263,6 @@
             const isManagerDispatcher = ['MANAGER', 'DISPATCHER'].includes(userRole);
             const isExecutor = (assignedTo && assignedTo == currentUserId);
             
-            // Менеджер/диспетчер: действия по статусу
             if (isManagerDispatcher) {
                 const actions = [];
                 if (status === 'new' || status === 'in_progress') actions.push('assign');
@@ -269,12 +274,10 @@
                 return actions;
             }
             
-            // Исполнитель (CONTRACTOR)
             if (status === 'in_progress' && isExecutor) {
                 return ['mark-completed', 'suspend'];
             }
             
-            // Остальные (VIEWER и т.д.)
             return [];
         }
 
@@ -370,7 +373,6 @@
             }
         }
 
-        // Обработчики правого клика
         document.querySelectorAll('.status-badge').forEach(b => {
             b.addEventListener('contextmenu', e => {
                 e.preventDefault();
@@ -382,7 +384,6 @@
         window.addEventListener('scroll', hideMenu);
         window.addEventListener('resize', hideMenu);
 
-        // Обработка пунктов меню
         document.querySelectorAll('.menu-item').forEach(item => {
             item.addEventListener('click', e => {
                 e.preventDefault();
