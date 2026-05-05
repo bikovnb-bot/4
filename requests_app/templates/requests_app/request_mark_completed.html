@@ -1,13 +1,41 @@
 {% extends "base.html" %}
-{% block title %}Отметить выполненной{% endblock %}
+{% load custom_filters %}
+
+{% block title %}Отметить выполненной — заявка {{ req.request_number }}{% endblock %}
+
 {% block content %}
 <div class="container mt-4">
-    <h2>Заявка №{{ req.request_number }}</h2>
-    <p>Подтвердить выполнение? (материалы будут добавлены при закрытии)</p>
-    <form method="post">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-success">Да, выполнено</button>
-        <a href="{% url 'requests_app:request_detail' req.pk %}" class="btn btn-secondary">Отмена</a>
-    </form>
+    <div class="mb-3">
+        <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Назад
+        </a>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0"><i class="bi bi-check-circle me-2"></i>Заявка №{{ req.request_number }}</h4>
+        </div>
+        <div class="card-body">
+            <p class="lead">Подтвердить выполнение заявки?</p>
+            <p class="text-muted">Материалы будут добавлены позже при закрытии заявки.</p>
+
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="time_spent" class="form-label">Затраченное время (минуты)</label>
+                    <input type="number" name="time_spent" id="time_spent" class="form-control" step="1" min="0" value="{{ req.time_spent|default:'' }}">
+                    <div class="form-text">Укажите время, затраченное на выполнение заявки (необязательно).</div>
+                </div>
+                <div class="d-flex gap-2 mt-3">
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-lg"></i> Да, выполнено
+                    </button>
+                    <a href="{% url 'requests_app:request_detail' req.pk %}" class="btn btn-secondary">
+                        <i class="bi bi-x-circle"></i> Отмена
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 {% endblock %}

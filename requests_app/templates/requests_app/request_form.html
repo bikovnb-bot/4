@@ -35,28 +35,6 @@
             isOlderCheckbox.addEventListener('change', toggleCustomDate);
             toggleCustomDate();
         }
-
-        // Учёт времени выполнения
-        const trackCheckbox = document.getElementById('{{ form.track_time.id_for_label }}');
-        const timeGroup = document.getElementById('time-spent-group');
-        if (trackCheckbox) {
-            function toggleTime() {
-                timeGroup.style.display = trackCheckbox.checked ? 'block' : 'none';
-            }
-            trackCheckbox.addEventListener('change', toggleTime);
-            toggleTime();
-        }
-
-        // Причина приостановки в зависимости от статуса
-        const statusSelect = document.getElementById('{{ form.status.id_for_label }}');
-        const suspensionGroup = document.getElementById('suspension-reason-group');
-        if (statusSelect) {
-            function toggleSuspensionReason() {
-                suspensionGroup.style.display = statusSelect.value === 'suspended' ? 'block' : 'none';
-            }
-            statusSelect.addEventListener('change', toggleSuspensionReason);
-            toggleSuspensionReason();
-        }
     });
 </script>
 {% endblock %}
@@ -123,10 +101,10 @@
                         {% endfor %}
                     </div>
 
-                    <!-- Средняя колонка -->
+                    <!-- Средняя колонка (перенесено время под плановую дату) -->
                     <div class="col-md-4">
                         {% for field in form %}
-                            {% if field.name in 'assigned_to,planned_date,comment,is_older,custom_created_at,status' %}
+                            {% if field.name in 'assigned_to,planned_date,time_spent,comment,is_older,custom_created_at,status' %}
                                 {% if field.name == 'is_older' %}
                                     <div class="mb-3 form-check">
                                         {{ field }}
@@ -159,12 +137,16 @@
                                         <label for="{{ field.id_for_label }}" class="form-label small fw-semibold">
                                             {% if field.name == 'assigned_to' %}<i class="bi bi-person-badge"></i>
                                             {% elif field.name == 'planned_date' %}<i class="bi bi-calendar"></i>
+                                            {% elif field.name == 'time_spent' %}<i class="bi bi-hourglass-split"></i>
                                             {% elif field.name == 'comment' %}<i class="bi bi-chat"></i>
                                             {% endif %}
                                             {{ field.label }}
                                         </label>
                                         {% if field.name == 'planned_date' %}
                                             <input type="text" name="planned_date" value="{{ field.value|date:'d.m.Y'|default:'' }}" class="form-control datepicker" placeholder="дд.мм.гггг">
+                                        {% elif field.name == 'time_spent' %}
+                                            {{ field }}
+                                            <div class="form-text">Укажите время в минутах, затраченное на выполнение (если известно).</div>
                                         {% else %}
                                             {{ field }}
                                         {% endif %}
@@ -176,7 +158,7 @@
                         {% endfor %}
                     </div>
 
-                    <!-- Правая колонка -->
+                    <!-- Правая колонка (описание, файлы) -->
                     <div class="col-md-4">
                         <div class="mb-3">
                             <label for="{{ form.description.id_for_label }}" class="form-label small fw-semibold">
@@ -185,37 +167,36 @@
                             {{ form.description }}
                             {% if form.description.errors %}<div class="text-danger small">{{ form.description.errors }}</div>{% endif %}
                         </div>
+
+                        <!-- Блок существующих файлов -->
+                        {% if files %}
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold">Прикреплённые файлы</label>
+                                <div class="list-group">
+                                    {% for file in files %}
+                                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <a href="{{ file.file.url }}" target="_blank" class="text-decoration-none">
+                                                    <i class="bi bi-file-earmark"></i> {{ file.get_file_name }}
+                                                </a>
+                                                <br>
+                                                <small class="text-muted">{{ file.uploaded_at|date:"d.m.Y H:i" }}, загрузил: {{ file.uploaded_by.get_full_name|default:file.uploaded_by.username }}</small>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="delete_files" value="{{ file.id }}" id="del_file_{{ file.id }}">
+                                                <label class="form-check-label" for="del_file_{{ file.id }}">Удалить</label>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        <!-- Загрузка новых файлов -->
                         <div class="mb-3">
                             <label class="form-label small fw-semibold"><i class="bi bi-paperclip"></i> Файлы (можно несколько)</label>
                             <input type="file" name="files" multiple class="form-control" id="fileInput">
                             <div id="filePreview" class="mt-2 small text-muted"></div>
-                        </div>
-                        <div class="mb-3">
-                            <div class="form-check">
-                                {{ form.track_time }}
-                                <label class="form-check-label" for="{{ form.track_time.id_for_label }}">
-                                    <i class="bi bi-stopwatch"></i> {{ form.track_time.label }}
-                                </label>
-                            </div>
-                        </div>
-                        <div id="time-spent-group" style="display: none;">
-                            <div class="mb-3">
-                                <label for="{{ form.time_spent.id_for_label }}" class="form-label small fw-semibold">
-                                    <i class="bi bi-hourglass-split"></i> {{ form.time_spent.label }}
-                                </label>
-                                {{ form.time_spent }}
-                                {% if form.time_spent.help_text %}<div class="form-text small">{{ form.time_spent.help_text }}</div>{% endif %}
-                                {% if form.time_spent.errors %}<div class="text-danger small">{{ form.time_spent.errors }}</div>{% endif %}
-                            </div>
-                        </div>
-                        <div id="suspension-reason-group" style="display: none;">
-                            <div class="mb-3">
-                                <label for="{{ form.suspension_reason.id_for_label }}" class="form-label small fw-semibold">
-                                    <i class="bi bi-info-circle"></i> {{ form.suspension_reason.label }}
-                                </label>
-                                {{ form.suspension_reason }}
-                                {% if form.suspension_reason.errors %}<div class="text-danger small">{{ form.suspension_reason.errors }}</div>{% endif %}
-                            </div>
                         </div>
                     </div>
                 </div>

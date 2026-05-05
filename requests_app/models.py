@@ -78,10 +78,11 @@ class ServiceRequest(models.Model):
 
 
 class RequestFile(models.Model):
-    request = models.ForeignKey(ServiceRequest, on_delete=models.CASCADE, related_name='files', verbose_name="Заявка")
+    request = models.ForeignKey(ServiceRequest, on_delete=models.CASCADE, related_name='files', verbose_name="Файлы")
     file = models.FileField(upload_to='request_files/%Y/%m/%d/', verbose_name="Файл")
     uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Кто загрузил")
     uploaded_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата загрузки")
+    description = models.CharField(max_length=255, blank=True, verbose_name="Описание")
 
     def get_file_name(self):
         return self.file.name.split('/')[-1]

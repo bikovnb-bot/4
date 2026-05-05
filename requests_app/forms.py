@@ -6,11 +6,17 @@ from buildings.models import Building
 
 
 class ServiceRequestForm(forms.ModelForm):
-    """Упрощённая форма создания/редактирования заявки (только основные поля)"""
+    """Упрощённая форма создания/редактирования заявки"""
     planned_date = forms.DateField(
         required=False,
         widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
         label='Плановая дата выполнения'
+    )
+    time_spent = forms.IntegerField(
+        required=False,
+        min_value=0,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '1', 'min': '0'}),
+        label='Затраченное время (минуты)'
     )
 
     class Meta:
@@ -22,6 +28,7 @@ class ServiceRequestForm(forms.ModelForm):
             'description',
             'priority',
             'planned_date',
+            'time_spent',
         ]
         widgets = {
             'building': forms.Select(attrs={'class': 'form-select'}),
@@ -30,6 +37,7 @@ class ServiceRequestForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'rows': 4, 'class': 'form-control', 'placeholder': 'Опишите проблему...'}),
             'priority': forms.Select(attrs={'class': 'form-select'}),
             'planned_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'time_spent': forms.NumberInput(attrs={'class': 'form-control', 'step': '1', 'min': '0'}),
         }
         labels = {
             'building': 'Здание',
@@ -38,26 +46,26 @@ class ServiceRequestForm(forms.ModelForm):
             'description': 'Описание',
             'priority': 'Приоритет',
             'planned_date': 'Плановая дата',
+            'time_spent': 'Затраченное время (минуты)',
         }
 
     def __init__(self, user, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['request_type'].queryset = RequestType.objects.filter(is_active=True)
-        # Если в будущем у Building появится is_active, можно раскомментировать:
-        # self.fields['building'].queryset = Building.objects.filter(is_active=True)
 
 
 class RequestFileForm(forms.ModelForm):
     """Форма для загрузки файлов к заявке"""
     class Meta:
         model = RequestFile
-        fields = ['file']
+        fields = ['file', 'description']
         widgets = {
-            'file': forms.ClearableFileInput(attrs={'class': 'form-control'})
+            'file': forms.ClearableFileInput(attrs={'class': 'form-control'}),
+            'description': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Описание (необязательно)'}),
         }
 
 
-# Формсет для материалов (используется при закрытии заявки и в деталях)
+# Формсет для материалов
 class UsedMaterialForm(forms.ModelForm):
     class Meta:
         model = UsedMaterial
@@ -83,7 +91,7 @@ UsedMaterialFormSet = inlineformset_factory(
 )
 
 
-# Форма для настраиваемого отчёта по заявкам
+# Форма для настраиваемого отчёта
 class ReportForm(forms.Form):
     columns = forms.MultipleChoiceField(
         choices=[

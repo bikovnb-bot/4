@@ -1,21 +1,22 @@
 import json
 from decimal import Decimal
+from datetime import datetime, timedelta
+import openpyxl
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib import messages
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Avg
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.core.paginator import Paginator
-from datetime import datetime
-import openpyxl
 
-from .models import ServiceRequest, UsedMaterial, Material, RequestType, RequestHistory
+from .models import ServiceRequest, UsedMaterial, Material, RequestType, RequestHistory, RequestFile
 from .forms import (
     ServiceRequestForm, UsedMaterialFormSet, ReportForm,
-    ImportMaterialsForm, MaterialForm
+    ImportMaterialsForm, MaterialForm, RequestFileForm
 )
 from users.models import UserRole
 from buildings.models import Building
@@ -79,28 +80,45 @@ def request_list(request):
 
 @login_required
 def request_create(request):
+    print("=== 1. request_create вызвана ===")
+    print("Метод запроса:", request.method)
+    print("POST данные:", request.POST)
+    print("FILES данные:", request.FILES)
+    
     if request.method == 'POST':
+        print("=== 2. Это POST запрос ===")
         form = ServiceRequestForm(request.user, request.POST)
+        print("=== 3. Форма создана ===")
         if form.is_valid():
+            print("=== 4. Форма валидна ===")
             req = form.save(commit=False)
             req.created_by = request.user
             req.status = 'new'
             req.created_at = timezone.now()
             req.save()
-            RequestHistory.objects.create(
-                request=req,
-                user=request.user,
-                action=f'Создана заявка №{req.request_number}',
-            )
+            print("=== 5. Заявка сохранена, ID:", req.id)
+            
+            # Обработка файлов
+            files = request.FILES.getlist('files')
+            print("=== 6. Файлы:", files)
+            for f in files:
+                print(f"Файл: {f.name}, размер: {f.size}")
+                RequestFile.objects.create(
+                    request=req,
+                    file=f,
+                    uploaded_by=request.user,
+                    description=''
+                )
             messages.success(request, f'Заявка {req.request_number} успешно создана.')
             return redirect('requests_app:request_detail', pk=req.pk)
+        else:
+            print("=== 4. Форма НЕ валидна ===")
+            print("Ошибки формы:", form.errors)
     else:
-        form = ServiceRequestForm(request.user)
-
-    return render(request, 'requests_app/request_form.html', {
-        'form': form,
-        'title': 'Создание заявки'
-    })
+        print("=== 2. Не POST запрос ===")
+    
+    form = ServiceRequestForm(request.user)
+    return render(request, 'requests_app/request_form.html', {'form': form, 'title': 'Создание заявки'})
 
 
 @login_required
@@ -122,11 +140,27 @@ def request_edit(request, pk):
         if form.is_valid():
             req = form.save(commit=False)
             req.save()
-            RequestHistory.objects.create(
-                request=req,
-                user=request.user,
-                action='Заявка отредактирована',
-            )
+
+            # Удаление файлов
+            delete_files = request.POST.getlist('delete_files')
+            for file_id in delete_files:
+                try:
+                    file_obj = RequestFile.objects.get(id=file_id, request=req)
+                    file_obj.file.delete()  # удаляем физический файл
+                    file_obj.delete()
+                except RequestFile.DoesNotExist:
+                    pass
+
+            # Добавление новых файлов
+            new_files = request.FILES.getlist('files')
+            for f in new_files:
+                RequestFile.objects.create(
+                    request=req,
+                    file=f,
+                    uploaded_by=request.user,
+                    description=''
+                )
+
             messages.success(request, 'Заявка обновлена.')
             return redirect('requests_app:request_detail', pk=req.pk)
     else:
@@ -136,7 +170,8 @@ def request_edit(request, pk):
         'form': form,
         'title': 'Редактирование заявки',
         'is_edit': True,
-        'request_obj': req
+        'request_obj': req,
+        'files': req.files.all(),
     })
 
 
@@ -177,6 +212,7 @@ def request_detail(request, pk):
         'can_edit': can_edit,
         'attachments': [],
         'history': history,
+        'files': req.files.all(),
     }
     return render(request, 'requests_app/request_detail.html', context)
 
@@ -255,6 +291,26 @@ def request_mark_completed(request, pk):
                 return JsonResponse({'success': False, 'message': 'Нет прав или неверный статус'})
             messages.error(request, 'Нет прав для отметки выполнения.')
             return redirect('requests_app:request_detail', pk=pk)
+
+    if request.method == 'POST':
+        req.status = 'completed'
+        req.completed_date = timezone.now()
+        # Сохраняем затраченное время, если передано
+        time_spent = request.POST.get('time_spent')
+        if time_spent and time_spent.isdigit():
+            req.time_spent = int(time_spent)
+        req.save()
+        RequestHistory.objects.create(
+            request=req,
+            user=request.user,
+            action='Заявка отмечена как выполненная' + (f' (время: {time_spent} мин)' if time_spent else '')
+        )
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'message': 'Заявка отмечена выполненной'})
+        messages.success(request, 'Заявка выполнена.')
+        return redirect('requests_app:request_detail', pk=pk)
+
+    return redirect('requests_app:request_detail', pk=pk)
 
     if request.method == 'POST':
         req.status = 'completed'
@@ -344,7 +400,6 @@ def request_close(request, pk):
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else None
 
-    # Права: администратор, менеджер, диспетчер
     if role != UserRole.ADMIN and role not in [UserRole.MANAGER, UserRole.DISPATCHER]:
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({'success': False, 'message': 'Нет прав для закрытия'})
@@ -361,7 +416,7 @@ def request_close(request, pk):
         units = request.POST.getlist('material_unit[]')
         prices = request.POST.getlist('material_price[]')
 
-        # Собираем только те строки, где выбран материал и количество > 0
+        materials_used = False
         with transaction.atomic():
             for mat_id, qty_str, unit, price_str in zip(material_ids, quantities, units, prices):
                 if not mat_id or not qty_str:
@@ -372,7 +427,6 @@ def request_close(request, pk):
                         continue
                 except (ValueError, TypeError):
                     continue
-                # Если материал указан и количество корректное, списываем
                 try:
                     material = Material.objects.get(pk=int(mat_id))
                 except (Material.DoesNotExist, ValueError, TypeError):
@@ -393,19 +447,18 @@ def request_close(request, pk):
                 )
                 material.quantity_in_stock -= qty
                 material.save()
+                materials_used = True
 
         req.status = 'closed'
         req.save()
-        # Запись в историю (если используется)
         RequestHistory.objects.create(
             request=req,
             user=request.user,
-            action='Заявка закрыта' + (' (с материалами)' if any(mat_id for mat_id in material_ids) else ' (без материалов)')
+            action='Заявка закрыта' + (' (с материалами)' if materials_used else ' (без материалов)')
         )
         messages.success(request, f'Заявка #{req.request_number} закрыта.')
         return redirect('requests_app:request_detail', pk=req.pk)
 
-    # GET – подготовка формы
     materials_qs = Material.objects.all().values('id', 'name', 'unit', 'default_price')
     materials_json = json.dumps(list(materials_qs), default=str)
     context = {
@@ -417,33 +470,92 @@ def request_close(request, pk):
     return render(request, 'requests_app/request_close.html', context)
 
 
-# ---------- Остальные представления (дашборд, экспорт, отчёты, материалы) ----------
+# ---------- Дашборд ----------
 @login_required
 def request_dashboard(request):
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else UserRole.VIEWER
 
-    if role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]:
-        status_counts = ServiceRequest.objects.values('status').annotate(total=Count('id')).order_by('status')
-        executor_data = ServiceRequest.objects.filter(assigned_to__isnull=False).values(
-            'assigned_to__username', 'assigned_to__first_name', 'assigned_to__last_name'
-        ).annotate(total=Count('id')).order_by('-total')[:10]
-        monthly_data = ServiceRequest.objects.extra(
-            select={'month': "strftime('%%Y-%%m', created_at)"}
-        ).values('month').annotate(total=Count('id')).order_by('month')[:12]
-    else:
-        status_counts = []
-        executor_data = []
-        monthly_data = []
+    qs = ServiceRequest.objects.all()
+
+    # Общая статистика
+    total_requests = qs.count()
+    completed_closed = qs.filter(status__in=['completed', 'closed']).count()
+    in_progress_count = qs.filter(status='in_progress').count()
+    overdue_count = qs.filter(
+        planned_date__lt=timezone.now().date(),
+        status__in=['new', 'in_progress', 'suspended']
+    ).count()
+
+    # Данные для графика статусов
+    status_counts = qs.values('status').annotate(total=Count('id'))
+    status_labels = []
+    status_data = []
+    status_display = dict(ServiceRequest.STATUS_CHOICES)
+    for item in status_counts:
+        status_labels.append(status_display.get(item['status'], item['status']))
+        status_data.append(item['total'])
+
+    # Данные для круговой диаграммы по типам заявок (топ 5)
+    type_counts = qs.values('request_type__name').annotate(total=Count('id')).order_by('-total')[:5]
+    type_labels = [item['request_type__name'] or 'Без типа' for item in type_counts]
+    type_data = [item['total'] for item in type_counts]
+
+    # Динамика по месяцам (последние 12 месяцев) – группировка в Python
+    today = timezone.now()
+    start_date = today - timedelta(days=365)
+    requests_in_period = qs.filter(created_at__date__gte=start_date, created_at__date__lte=today)
+    
+    from collections import defaultdict
+    monthly_dict = defaultdict(int)
+    for req in requests_in_period:
+        month_key = req.created_at.strftime('%Y-%m')
+        monthly_dict[month_key] += 1
+    
+    # Сортируем по месяцам
+    month_labels = sorted(monthly_dict.keys())
+    month_data = [monthly_dict[m] for m in month_labels]
+
+    # Топ исполнителей
+    executors = qs.filter(assigned_to__isnull=False).values(
+        'assigned_to__first_name', 'assigned_to__last_name', 'assigned_to__username'
+    ).annotate(count=Count('id')).order_by('-count')[:5]
+    top_executors = []
+    for e in executors:
+        name = e['assigned_to__first_name'] or e['assigned_to__username']
+        if e['assigned_to__last_name']:
+            name += ' ' + e['assigned_to__last_name']
+        top_executors.append({
+            'name': name,
+            'count': e['count'],
+            'percent': (e['count'] / total_requests * 100) if total_requests > 0 else 0
+        })
+
+    # Среднее время выполнения (в днях) для выполненных/закрытых заявок
+    completed_reqs = qs.filter(status__in=['completed', 'closed'], completed_date__isnull=False)
+    avg_days = 0
+    if completed_reqs.exists():
+        total_seconds = sum((req.completed_date - req.created_at).total_seconds() for req in completed_reqs)
+        avg_days = total_seconds / len(completed_reqs) / 86400
 
     context = {
-        'status_counts': list(status_counts),
-        'executor_counts': executor_data,
-        'monthly_counts': list(monthly_data),
+        'total_requests': total_requests,
+        'completed_closed': completed_closed,
+        'in_progress_count': in_progress_count,
+        'overdue_count': overdue_count,
+        'status_labels': status_labels,
+        'status_data': status_data,
+        'type_labels': type_labels,
+        'type_data': type_data,
+        'month_labels': month_labels,
+        'month_data': month_data,
+        'top_executors': top_executors,
+        'avg_completion_time': avg_days,
     }
     return render(request, 'requests_app/dashboard.html', context)
 
 
+# ---------- Экспорт, отчёты, материалы ----------
 @login_required
 def export_requests_excel(request):
     user = request.user
@@ -730,6 +842,7 @@ def material_edit(request, pk):
         form = MaterialForm(instance=material)
     return render(request, 'requests_app/material_form.html', {'form': form, 'title': 'Редактировать материал'})
 
+
 @login_required
 def material_delete(request, pk):
     material = get_object_or_404(Material, pk=pk)
@@ -747,7 +860,6 @@ def material_delete(request, pk):
     
     return render(request, 'requests_app/material_confirm_delete.html', {'material': material})
 
-from django.http import JsonResponse
 
 @login_required
 def material_delete_ajax(request, pk):

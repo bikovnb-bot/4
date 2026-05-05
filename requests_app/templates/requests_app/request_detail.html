@@ -58,9 +58,9 @@
                                         {% endif %}
                                     </td>
                                 </tr>
-                                <tr><th>Здание</th><td>{{ req.building.name|default:req.building.address|default:"—" }}</td>
-                                <tr><th>Помещение</th><td>{{ req.room_number|default:"—" }}</td>
-                                <tr><th>Тип заявки</th><td>{{ req.request_type.name|default:"—" }}</td>
+                                <tr><th>Здание</th><td>{{ req.building.name|default:req.building.address|default:"—" }}</td></tr>
+                                <tr><th>Помещение</th><td>{{ req.room_number|default:"—" }}</td></tr>
+                                <tr><th>Тип заявки</th><td>{{ req.request_type.name|default:"—" }}</td></tr>
                             </table>
                         </div>
                         <div class="col-md-6">
@@ -83,9 +83,10 @@
                                         {% endif %}
                                     </td>
                                 </tr>
-                                <tr><th>Плановая дата</th><td>{{ req.planned_date|date:"d.m.Y"|default:"—" }}</td>
-                                <tr><th>Дата выполнения</th><td>{{ req.completed_date|date:"d.m.Y H:i"|default:"—" }}</td>
-                                <tr><th>Дата создания</th><td>{{ req.created_at|date:"d.m.Y H:i" }}</td>
+                                <tr><th>Плановая дата</th><td>{{ req.planned_date|date:"d.m.Y"|default:"—" }}</td></tr>
+                                <tr><th>Дата выполнения</th><td>{{ req.completed_date|date:"d.m.Y H:i"|default:"—" }}</td></tr>
+                                <tr><th>Затраченное время (мин)</th><td>{{ req.time_spent|default:"—" }}</td></tr>
+                                <tr><th>Дата создания</th><td>{{ req.created_at|date:"d.m.Y H:i" }}</td></tr>
                             </table>
                         </div>
                     </div>
@@ -107,13 +108,30 @@
         </div>
 
         <div class="col-md-4">
-            <!-- Блок вложений (заглушка) -->
+            <!-- Блок вложений -->
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-light">
                     <h5 class="mb-0"><i class="bi bi-paperclip me-2"></i>Вложения</h5>
                 </div>
-                <div class="card-body text-center">
-                    <p class="text-muted mb-0">Файлы не прикреплены</p>
+                <div class="card-body">
+                    {% if files %}
+                        <div class="list-group list-group-flush">
+                            {% for file in files %}
+                                <div class="list-group-item px-0">
+                                    <a href="{{ file.file.url }}" target="_blank" class="text-decoration-none">
+                                        <i class="bi bi-file-earmark"></i> {{ file.get_file_name }}
+                                    </a>
+                                    {% if file.description %}
+                                        <span class="text-muted small"> – {{ file.description }}</span>
+                                    {% endif %}
+                                    <br>
+                                    <small class="text-secondary">{{ file.uploaded_at|date:"d.m.Y H:i" }}, загрузил: {{ file.uploaded_by.get_full_name|default:file.uploaded_by.username }}</small>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted text-center mb-0">Файлы не прикреплены</p>
+                    {% endif %}
                 </div>
             </div>
 
