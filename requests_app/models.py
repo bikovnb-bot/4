@@ -77,6 +77,21 @@ class ServiceRequest(models.Model):
         return f"{self.request_number} - {self.building}"
 
 
+# Модель для множественных исполнителей
+class RequestAssignee(models.Model):
+    request = models.ForeignKey(ServiceRequest, on_delete=models.CASCADE, related_name='assignees')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='assigned_to_requests')  # изменено
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['request', 'user']
+        verbose_name = 'Назначенный исполнитель'
+        verbose_name_plural = 'Назначенные исполнители'
+
+    def __str__(self):
+        return f'{self.user.get_full_name() or self.user.username} -> {self.request.request_number}'
+
+
 class RequestFile(models.Model):
     request = models.ForeignKey(ServiceRequest, on_delete=models.CASCADE, related_name='files', verbose_name="Файлы")
     file = models.FileField(upload_to='request_files/%Y/%m/%d/', verbose_name="Файл")

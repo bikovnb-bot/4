@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Добавить исполнителя{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="mb-3">
+        <a href="{% url 'requests_app:request_detail' request_obj.id %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Назад
+        </a>
+    </div>
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h4>Добавить исполнителя для заявки №{{ request_obj.request_number }}</h4>
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label">Выберите сотрудника</label>
+                    <select name="user_id" class="form-select" required>
+                        <option value="">---------</option>
+                        {% for u in users %}
+                            <option value="{{ u.id }}">{{ u.get_full_name|default:u.username }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Добавить</button>
+                <a href="{% url 'requests_app:request_detail' request_obj.id %}" class="btn btn-secondary">Отмена</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

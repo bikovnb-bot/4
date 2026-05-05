@@ -26,4 +26,6 @@ urlpatterns = [
     path('materials/<int:pk>/edit/', views.material_edit, name='material_edit'),
     path('materials/<int:pk>/delete/', views.material_delete, name='material_delete'),
     path('materials/<int:pk>/delete-ajax/', views.material_delete_ajax, name='material_delete_ajax'),
+    path('<int:pk>/add-assignee/', views.request_add_assignee, name='request_add_assignee'),
+    path('<int:pk>/remove-assignee/<int:user_id>/', views.request_remove_assignee, name='request_remove_assignee'),
 ]

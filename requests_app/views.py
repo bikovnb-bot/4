@@ -13,7 +13,7 @@ from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.core.paginator import Paginator
 
-from .models import ServiceRequest, UsedMaterial, Material, RequestType, RequestHistory, RequestFile
+from .models import ServiceRequest, UsedMaterial, Material, RequestType, RequestHistory, RequestFile, RequestAssignee
 from .forms import (
     ServiceRequestForm, UsedMaterialFormSet, ReportForm,
     ImportMaterialsForm, MaterialForm, RequestFileForm
@@ -30,7 +30,7 @@ def request_list(request):
     qs = ServiceRequest.objects.select_related('building', 'created_by', 'assigned_to')
 
     if role == UserRole.CONTRACTOR:
-        qs = qs.filter(assigned_to=user)
+        qs = qs.filter(Q(assigned_to=user) | Q(assignees__user=user)).distinct()
     elif role == UserRole.VIEWER:
         qs = qs.filter(created_by=user)
 
@@ -80,29 +80,17 @@ def request_list(request):
 
 @login_required
 def request_create(request):
-    print("=== 1. request_create вызвана ===")
-    print("Метод запроса:", request.method)
-    print("POST данные:", request.POST)
-    print("FILES данные:", request.FILES)
-    
     if request.method == 'POST':
-        print("=== 2. Это POST запрос ===")
         form = ServiceRequestForm(request.user, request.POST)
-        print("=== 3. Форма создана ===")
         if form.is_valid():
-            print("=== 4. Форма валидна ===")
             req = form.save(commit=False)
             req.created_by = request.user
             req.status = 'new'
             req.created_at = timezone.now()
             req.save()
-            print("=== 5. Заявка сохранена, ID:", req.id)
-            
-            # Обработка файлов
+
             files = request.FILES.getlist('files')
-            print("=== 6. Файлы:", files)
             for f in files:
-                print(f"Файл: {f.name}, размер: {f.size}")
                 RequestFile.objects.create(
                     request=req,
                     file=f,
@@ -112,12 +100,10 @@ def request_create(request):
             messages.success(request, f'Заявка {req.request_number} успешно создана.')
             return redirect('requests_app:request_detail', pk=req.pk)
         else:
-            print("=== 4. Форма НЕ валидна ===")
-            print("Ошибки формы:", form.errors)
+            messages.error(request, 'Ошибка в форме.')
     else:
-        print("=== 2. Не POST запрос ===")
-    
-    form = ServiceRequestForm(request.user)
+        form = ServiceRequestForm(request.user)
+
     return render(request, 'requests_app/request_form.html', {'form': form, 'title': 'Создание заявки'})
 
 
@@ -141,17 +127,15 @@ def request_edit(request, pk):
             req = form.save(commit=False)
             req.save()
 
-            # Удаление файлов
             delete_files = request.POST.getlist('delete_files')
             for file_id in delete_files:
                 try:
                     file_obj = RequestFile.objects.get(id=file_id, request=req)
-                    file_obj.file.delete()  # удаляем физический файл
+                    file_obj.file.delete()
                     file_obj.delete()
                 except RequestFile.DoesNotExist:
                     pass
 
-            # Добавление новых файлов
             new_files = request.FILES.getlist('files')
             for f in new_files:
                 RequestFile.objects.create(
@@ -181,10 +165,12 @@ def request_detail(request, pk):
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else UserRole.VIEWER
 
+    # Проверка доступа
     if role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]:
-        if role == UserRole.CONTRACTOR and req.assigned_to != user:
-            messages.error(request, 'Нет доступа.')
-            return redirect('requests_app:request_list')
+        if role == UserRole.CONTRACTOR:
+            if not (req.assigned_to == user or req.assignees.filter(user=user).exists()):
+                messages.error(request, 'Нет доступа.')
+                return redirect('requests_app:request_list')
         elif role == UserRole.VIEWER and req.created_by != user:
             messages.error(request, 'Нет доступа.')
             return redirect('requests_app:request_list')
@@ -192,13 +178,15 @@ def request_detail(request, pk):
     materials_formset = UsedMaterialFormSet(instance=req)
 
     can_assign = role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER] and req.status in ['new', 'in_progress']
-    can_mark_completed = (req.assigned_to == user or role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]) and req.status == 'in_progress'
-    can_suspend = (req.assigned_to == user or role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]) and req.status == 'in_progress'
+    is_executor = (req.assigned_to == user or req.assignees.filter(user=user).exists())
+    can_mark_completed = (is_executor or role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]) and req.status == 'in_progress'
+    can_suspend = (is_executor or role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]) and req.status == 'in_progress'
     can_resume = role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER] and req.status == 'suspended'
     can_close = role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER] and req.status == 'completed'
     can_edit = (role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER] or req.created_by == user) and not (req.status == 'closed' and role != UserRole.ADMIN)
 
     history = req.history.all()[:30]
+    assignees = req.assignees.all()
 
     context = {
         'req': req,
@@ -213,6 +201,7 @@ def request_detail(request, pk):
         'attachments': [],
         'history': history,
         'files': req.files.all(),
+        'assignees': assignees,
     }
     return render(request, 'requests_app/request_detail.html', context)
 
@@ -284,9 +273,9 @@ def request_mark_completed(request, pk):
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else None
 
+    is_executor = (req.assigned_to == user or req.assignees.filter(user=user).exists())
     if role != UserRole.ADMIN:
-        can_mark = (req.assigned_to == user or role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]) and req.status == 'in_progress'
-        if not can_mark:
+        if not (is_executor or role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]) or req.status != 'in_progress':
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse({'success': False, 'message': 'Нет прав или неверный статус'})
             messages.error(request, 'Нет прав для отметки выполнения.')
@@ -295,7 +284,6 @@ def request_mark_completed(request, pk):
     if request.method == 'POST':
         req.status = 'completed'
         req.completed_date = timezone.now()
-        # Сохраняем затраченное время, если передано
         time_spent = request.POST.get('time_spent')
         if time_spent and time_spent.isdigit():
             req.time_spent = int(time_spent)
@@ -312,22 +300,6 @@ def request_mark_completed(request, pk):
 
     return redirect('requests_app:request_detail', pk=pk)
 
-    if request.method == 'POST':
-        req.status = 'completed'
-        req.completed_date = timezone.now()
-        req.save()
-        RequestHistory.objects.create(
-            request=req,
-            user=request.user,
-            action='Заявка отмечена как выполненная',
-        )
-        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            return JsonResponse({'success': True, 'message': 'Заявка отмечена выполненной'})
-        messages.success(request, 'Заявка выполнена.')
-        return redirect('requests_app:request_detail', pk=pk)
-
-    return redirect('requests_app:request_detail', pk=pk)
-
 
 @login_required
 def request_suspend(request, pk):
@@ -335,8 +307,9 @@ def request_suspend(request, pk):
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else None
 
+    is_executor = (req.assigned_to == user or req.assignees.filter(user=user).exists())
     if role != UserRole.ADMIN:
-        if not ((req.assigned_to == user or role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]) and req.status == 'in_progress'):
+        if not (is_executor or role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]) or req.status != 'in_progress':
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse({'success': False, 'message': 'Нет прав для приостановки'})
             messages.error(request, 'Нет прав для приостановки.')
@@ -478,7 +451,6 @@ def request_dashboard(request):
 
     qs = ServiceRequest.objects.all()
 
-    # Общая статистика
     total_requests = qs.count()
     completed_closed = qs.filter(status__in=['completed', 'closed']).count()
     in_progress_count = qs.filter(status='in_progress').count()
@@ -487,7 +459,6 @@ def request_dashboard(request):
         status__in=['new', 'in_progress', 'suspended']
     ).count()
 
-    # Данные для графика статусов
     status_counts = qs.values('status').annotate(total=Count('id'))
     status_labels = []
     status_data = []
@@ -496,42 +467,45 @@ def request_dashboard(request):
         status_labels.append(status_display.get(item['status'], item['status']))
         status_data.append(item['total'])
 
-    # Данные для круговой диаграммы по типам заявок (топ 5)
     type_counts = qs.values('request_type__name').annotate(total=Count('id')).order_by('-total')[:5]
     type_labels = [item['request_type__name'] or 'Без типа' for item in type_counts]
     type_data = [item['total'] for item in type_counts]
 
-    # Динамика по месяцам (последние 12 месяцев) – группировка в Python
     today = timezone.now()
     start_date = today - timedelta(days=365)
     requests_in_period = qs.filter(created_at__date__gte=start_date, created_at__date__lte=today)
-    
     from collections import defaultdict
     monthly_dict = defaultdict(int)
     for req in requests_in_period:
         month_key = req.created_at.strftime('%Y-%m')
         monthly_dict[month_key] += 1
-    
-    # Сортируем по месяцам
     month_labels = sorted(monthly_dict.keys())
     month_data = [monthly_dict[m] for m in month_labels]
 
-    # Топ исполнителей
-    executors = qs.filter(assigned_to__isnull=False).values(
-        'assigned_to__first_name', 'assigned_to__last_name', 'assigned_to__username'
-    ).annotate(count=Count('id')).order_by('-count')[:5]
-    top_executors = []
-    for e in executors:
-        name = e['assigned_to__first_name'] or e['assigned_to__username']
-        if e['assigned_to__last_name']:
-            name += ' ' + e['assigned_to__last_name']
-        top_executors.append({
-            'name': name,
-            'count': e['count'],
-            'percent': (e['count'] / total_requests * 100) if total_requests > 0 else 0
-        })
+    # Топ исполнителей (основные + дополнительные)
+    from collections import defaultdict
+    user_counts = defaultdict(int)
+    # Основные назначения
+    for user_id in qs.filter(assigned_to__isnull=False).values_list('assigned_to_id', flat=True):
+        user_counts[user_id] += 1
+    # Дополнительные назначения
+    for user_id in qs.filter(assignees__isnull=False).values_list('assignees__user_id', flat=True):
+        user_counts[user_id] += 1
 
-    # Среднее время выполнения (в днях) для выполненных/закрытых заявок
+    top_executors = []
+    for user_id, count in sorted(user_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
+        try:
+            u = User.objects.get(pk=user_id)
+            name = u.get_full_name() or u.username
+            percent = (count / total_requests * 100) if total_requests > 0 else 0
+            top_executors.append({
+                'name': name,
+                'count': count,
+                'percent': percent,
+            })
+        except User.DoesNotExist:
+            continue
+
     completed_reqs = qs.filter(status__in=['completed', 'closed'], completed_date__isnull=False)
     avg_days = 0
     if completed_reqs.exists():
@@ -563,7 +537,7 @@ def export_requests_excel(request):
 
     qs = ServiceRequest.objects.select_related('building', 'created_by', 'assigned_to')
     if role == UserRole.CONTRACTOR:
-        qs = qs.filter(assigned_to=user)
+        qs = qs.filter(Q(assigned_to=user) | Q(assignees__user=user)).distinct()
     elif role == UserRole.VIEWER:
         qs = qs.filter(created_by=user)
 
@@ -872,3 +846,62 @@ def material_delete_ajax(request, pk):
         material.delete()
         return JsonResponse({'success': True})
     return JsonResponse({'success': False, 'error': 'Метод не разрешён'}, status=405)
+
+
+# ---------- Добавление/удаление множественных исполнителей ----------
+@login_required
+def request_add_assignee(request, pk):
+    req = get_object_or_404(ServiceRequest, pk=pk)
+    user = request.user
+    role = user.profile.role if hasattr(user, 'profile') else None
+
+    if role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]:
+        messages.error(request, 'Нет прав для назначения исполнителей.')
+        return redirect('requests_app:request_detail', pk=pk)
+
+    if request.method == 'POST':
+        user_id = request.POST.get('user_id')
+        if user_id:
+            try:
+                assignee = User.objects.get(pk=user_id)
+                obj, created = RequestAssignee.objects.get_or_create(request=req, user=assignee)
+                if created:
+                    RequestHistory.objects.create(
+                        request=req,
+                        user=request.user,
+                        action=f'Добавлен исполнитель: {assignee.get_full_name() or assignee.username}'
+                    )
+                    messages.success(request, f'Исполнитель {assignee.get_full_name() or assignee.username} добавлен.')
+                else:
+                    messages.warning(request, 'Этот исполнитель уже назначен.')
+            except User.DoesNotExist:
+                messages.error(request, 'Пользователь не найден.')
+        else:
+            messages.error(request, 'Выберите пользователя.')
+        return redirect('requests_app:request_detail', pk=pk)
+
+    assigned_user_ids = req.assignees.values_list('user_id', flat=True)
+    available_users = User.objects.filter(is_active=True).exclude(id__in=assigned_user_ids).exclude(id=req.assigned_to_id).order_by('username')
+    return render(request, 'requests_app/add_assignee.html', {'request_obj': req, 'users': available_users})
+
+
+@login_required
+def request_remove_assignee(request, pk, user_id):
+    req = get_object_or_404(ServiceRequest, pk=pk)
+    user = request.user
+    role = user.profile.role if hasattr(user, 'profile') else None
+
+    if role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]:
+        messages.error(request, 'Нет прав для удаления исполнителей.')
+        return redirect('requests_app:request_detail', pk=pk)
+
+    assignee = get_object_or_404(RequestAssignee, request=req, user_id=user_id)
+    assignee_name = assignee.user.get_full_name() or assignee.user.username
+    assignee.delete()
+    RequestHistory.objects.create(
+        request=req,
+        user=request.user,
+        action=f'Удалён исполнитель: {assignee_name}'
+    )
+    messages.success(request, f'Исполнитель {assignee_name} удалён.')
+    return redirect('requests_app:request_detail', pk=pk)
