@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Request Submitted{% endblock %}
+
+{% block extra_css %}
+<style>
+    .success-container {
+        max-width: 600px;
+        margin: 50px auto;
+        text-align: center;
+        animation: fadeInUp 0.6s ease-out;
+    }
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    .success-icon {
+        font-size: 5rem;
+        color: #28a745;
+        background-color: #e8f5e9;
+        width: 120px;
+        height: 120px;
+        line-height: 120px;
+        border-radius: 50%;
+        margin: 0 auto 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: bounce 1s ease;
+    }
+    @keyframes bounce {
+        0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
+        40% {transform: translateY(-20px);}
+        60% {transform: translateY(-10px);}
+    }
+    .success-icon i {
+        font-size: 4rem;
+        vertical-align: middle;
+    }
+    .warning-message {
+        background-color: #fff3cd;
+        border-left: 4px solid #ffc107;
+        padding: 15px;
+        margin-top: 20px;
+        border-radius: 8px;
+        text-align: left;
+        font-size: 0.95rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="success-container">
+        <div class="success-icon">
+            <i class="bi bi-hand-thumbs-up-fill"></i>
+        </div>
+        <h2 class="mt-3">Thank you for your request!</h2>
+        <p class="lead text-muted">Your request has been successfully received and registered.</p>
+        <p class="text-muted">We will begin processing it shortly. Usually, we complete the request within the working day.</p>
+        
+        {% if off_hours %}
+        <div class="warning-message">
+            <i class="bi bi-info-circle-fill" style="margin-right: 10px;"></i>
+            <strong>Notice!</strong> Your request has been accepted and will be processed during working hours.<br>
+            If you urgently need assistance, please contact the engineering and technical service staff, the duty administrators, or security personnel.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

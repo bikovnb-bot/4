@@ -1,0 +1,41 @@
+{% extends "admin/object_history.html" %}
+
+{% block content %}
+<div id="content-main">
+  <div class="module">
+    <h2>История изменений</h2>
+    <table style="width:100%">
+      <thead>
+        <tr>
+          <th>Дата и время</th>
+          <th>Пользователь</th>
+          <th>Изменение</th>
+          <th>Поля</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in history %}
+        <tr>
+          <td>{{ record.history_date|date:"d.m.Y H:i:s" }}</td>
+          <td>{{ record.history_user|default:"система" }}</td>
+          <td>{{ record.get_history_type_display }}</td>
+          <td>
+            {% if record.history_changes %}
+              <ul style="margin:0; padding-left:1em;">
+                {% for field, change in record.history_changes.items %}
+                  <li><b>{{ field }}:</b> {{ change.old }} → {{ change.new }}</li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              —
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4">История пуста</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

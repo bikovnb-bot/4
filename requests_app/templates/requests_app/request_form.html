@@ -101,59 +101,24 @@
                         {% endfor %}
                     </div>
 
-                    <!-- Средняя колонка (перенесено время под плановую дату) -->
+                    <!-- Средняя колонка -->
                     <div class="col-md-4">
                         {% for field in form %}
-                            {% if field.name in 'assigned_to,planned_date,time_spent,comment,is_older,custom_created_at,status' %}
-                                {% if field.name == 'is_older' %}
-                                    <div class="mb-3 form-check">
-                                        {{ field }}
-                                        <label class="form-check-label" for="{{ field.id_for_label }}">
-                                            <i class="bi bi-calendar-plus"></i> {{ field.label }}
-                                        </label>
-                                        {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
-                                        {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
-                                    </div>
-                                {% elif field.name == 'custom_created_at' %}
-                                    <div id="custom-created-at-group" class="mb-3" style="display: none;">
-                                        <label for="{{ field.id_for_label }}" class="form-label small fw-semibold">
-                                            <i class="bi bi-calendar-event"></i> {{ field.label }}
-                                        </label>
-                                        {{ field }}
-                                        {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
-                                        {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
-                                    </div>
-                                {% elif field.name == 'status' %}
-                                    <div class="mb-3">
-                                        <label for="{{ field.id_for_label }}" class="form-label small fw-semibold">
-                                            <i class="bi bi-check-circle"></i> {{ field.label }}
-                                        </label>
-                                        {{ field }}
-                                        {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
-                                        {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
-                                    </div>
-                                {% else %}
-                                    <div class="mb-3">
-                                        <label for="{{ field.id_for_label }}" class="form-label small fw-semibold">
-                                            {% if field.name == 'assigned_to' %}<i class="bi bi-person-badge"></i>
-                                            {% elif field.name == 'planned_date' %}<i class="bi bi-calendar"></i>
-                                            {% elif field.name == 'time_spent' %}<i class="bi bi-hourglass-split"></i>
-                                            {% elif field.name == 'comment' %}<i class="bi bi-chat"></i>
-                                            {% endif %}
-                                            {{ field.label }}
-                                        </label>
-                                        {% if field.name == 'planned_date' %}
-                                            <input type="text" name="planned_date" value="{{ field.value|date:'d.m.Y'|default:'' }}" class="form-control datepicker" placeholder="дд.мм.гггг">
-                                        {% elif field.name == 'time_spent' %}
-                                            {{ field }}
-                                            <div class="form-text">Укажите время в минутах, затраченное на выполнение (если известно).</div>
-                                        {% else %}
-                                            {{ field }}
+                            {% if field.name in 'planned_date,time_spent' %}
+                                <div class="mb-3">
+                                    <label for="{{ field.id_for_label }}" class="form-label small fw-semibold">
+                                        {% if field.name == 'planned_date' %}<i class="bi bi-calendar"></i>
+                                        {% elif field.name == 'time_spent' %}<i class="bi bi-hourglass-split"></i>
                                         {% endif %}
-                                        {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
-                                        {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
-                                    </div>
-                                {% endif %}
+                                        {{ field.label }}
+                                    </label>
+                                    {{ field }}
+                                    {% if field.name == 'time_spent' %}
+                                        <div class="form-text">Укажите время в минутах, затраченное на выполнение (если известно).</div>
+                                    {% endif %}
+                                    {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
+                                    {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+                                </div>
                             {% endif %}
                         {% endfor %}
                     </div>
@@ -180,7 +145,7 @@
                                                     <i class="bi bi-file-earmark"></i> {{ file.get_file_name }}
                                                 </a>
                                                 <br>
-                                                <small class="text-muted">{{ file.uploaded_at|date:"d.m.Y H:i" }}, загрузил: {{ file.uploaded_by.get_full_name|default:file.uploaded_by.username }}</small>
+                                                <small class="text-muted">{{ file.uploaded_at|date:"d.m.Y H:i" }}, загрузил: {{ file.uploaded_by|get_user_name }}</small>
                                             </div>
                                             <div class="form-check">
                                                 <input class="form-check-input" type="checkbox" name="delete_files" value="{{ file.id }}" id="del_file_{{ file.id }}">

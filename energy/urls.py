@@ -30,4 +30,7 @@ urlpatterns = [
     path('import/', views.import_readings, name='import_readings'),
     path('download-template/', views.download_import_template, name='download_import_template'),
     path('export-readings/', views.export_readings, name='export_readings'),
+
+    path('dashboard/', views.energy_dashboard, name='energy_dashboard'),
+    path('dashboard/save-settings/', views.save_dashboard_settings, name='save_dashboard_settings'),
 ]

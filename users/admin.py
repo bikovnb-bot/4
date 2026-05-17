@@ -30,3 +30,9 @@ class UserAdmin(BaseUserAdmin):
 # Регистрируем кастомного админа
 admin.site.unregister(User)
 admin.site.register(User, UserAdmin)
+
+class ProfileInline(admin.StackedInline):
+    model = Profile
+    can_delete = False
+    verbose_name_plural = 'Профиль'
+    filter_horizontal = ('extra_permissions', 'restricted_permissions')

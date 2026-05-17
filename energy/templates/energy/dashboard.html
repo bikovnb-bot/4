@@ -1,0 +1,405 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load custom_filters %}
+
+{% block title %}Энергетический дашборд{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sortablejs@latest/css/sortable.min.css">
+<style>
+    .widget-card {
+        transition: all 0.2s;
+        border-radius: 0.5rem;
+        background: white;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    }
+    .widget-card:hover {
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.1);
+    }
+    .widget-header {
+        cursor: grab;
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #e9ecef;
+        padding: 0.75rem 1rem;
+        border-radius: 0.5rem 0.5rem 0 0;
+    }
+    .widget-header:active {
+        cursor: grabbing;
+    }
+    .widget-body {
+        padding: 1rem;
+    }
+    .kpi-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 1rem;
+        padding: 1.2rem;
+    }
+    .kpi-card h6 {
+        opacity: 0.9;
+    }
+    .settings-panel {
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .chart-container canvas {
+        max-height: 300px;
+    }
+    .table-sm td, .table-sm th {
+        vertical-align: middle;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-speedometer2"></i> Энергетический дашборд</h2>
+        <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#filterPanel">
+            <i class="bi bi-funnel"></i> Фильтры и настройки
+        </button>
+    </div>
+
+    <!-- Панель фильтров и настройки виджетов -->
+    <div class="collapse mb-4" id="filterPanel">
+        <div class="card settings-panel">
+            <div class="card-body">
+                <form id="dashboardForm" method="get" class="row g-3">
+                    {% csrf_token %}
+                    <div class="col-md-2">
+                        <label class="form-label">Период</label>
+                        <select name="period" id="periodSelect" class="form-select form-select-sm">
+                            <option value="month" {% if period_type == 'month' %}selected{% endif %}>Месяц</option>
+                            <option value="quarter" {% if period_type == 'quarter' %}selected{% endif %}>Квартал</option>
+                            <option value="year" {% if period_type == 'year' %}selected{% endif %}>Год</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Год</label>
+                        <select name="year" id="yearSelect" class="form-select form-select-sm">
+                            {% for y in years %}
+                                <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2" id="monthDiv" {% if period_type != 'month' %}style="display:none;"{% endif %}>
+                        <label class="form-label">Месяц</label>
+                        <select name="month" id="monthSelect" class="form-select form-select-sm">
+                            {% for m in months %}
+                                <option value="{{ m.0 }}" {% if m.0 == selected_month %}selected{% endif %}>{{ m.1 }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2" id="quarterDiv" {% if period_type != 'quarter' %}style="display:none;"{% endif %}>
+                        <label class="form-label">Квартал</label>
+                        <select name="quarter" id="quarterSelect" class="form-select form-select-sm">
+                            {% for q in quarters %}
+                                <option value="{{ q }}" {% if q == selected_quarter %}selected{% endif %}>{{ q }} квартал</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Тип ресурса</label>
+                        <select name="resource_type" id="resourceTypeSelect" class="form-select form-select-sm">
+                            <option value="all" {% if selected_resource_type == 'all' %}selected{% endif %}>Все</option>
+                            {% for rt in resource_types %}
+                                <option value="{{ rt.id }}" {% if selected_resource_type|stringformat:"s" == rt.id|stringformat:"s" %}selected{% endif %}>{{ rt.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Порог аномалии (раз)</label>
+                        <input type="number" step="0.1" name="threshold" id="thresholdInput" class="form-control form-control-sm" value="{{ anomaly_threshold }}">
+                    </div>
+                    <div class="col-md-12">
+                        <button type="submit" class="btn btn-primary btn-sm">Применить</button>
+                        <button type="button" id="saveLayoutBtn" class="btn btn-outline-success btn-sm ms-2">Сохранить расположение виджетов</button>
+                    </div>
+                </form>
+                <hr>
+                <label class="form-label fw-semibold">Выберите виджеты для отображения:</label>
+                <div class="row g-2">
+                    {% for w_id, w_info in available_widgets.items %}
+                    <div class="col-auto">
+                        <div class="form-check">
+                            <input class="form-check-input widget-toggle" type="checkbox" value="{{ w_id }}" id="widget_{{ w_id }}"
+                                   {% if w_id in selected_widgets %}checked{% endif %}>
+                            <label class="form-check-label" for="widget_{{ w_id }}">
+                                {{ w_info.title }}
+                            </label>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Контейнер для виджетов (Drag-and-drop) -->
+    <div id="widgets-container" class="row g-4">
+        {% for w_id in widget_order %}
+            {% if w_id in selected_widgets %}
+            <div class="col-md-6 col-lg-4 widget-card" data-widget-id="{{ w_id }}">
+                <div class="card h-100 shadow-sm border-0">
+                    <div class="widget-header">
+                        <h5 class="mb-0">{{ available_widgets|get_item:w_id|get_item:'title' }}</h5>
+                    </div>
+                    <div class="widget-body">
+                        {% with data=widgets_data|get_item:w_id %}
+                            {% if w_id == 'kpi' %}
+                                <div class="row g-3">
+                                    <div class="col-6">
+                                        <div class="kpi-card">
+                                            <h6 class="mb-1">Общее потребление</h6>
+                                            <h3 class="mb-0">{{ data.total_consumption|floatformat:0 }} {{ data.unit }}</h3>
+                                            <small>за период</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="kpi-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                                            <h6 class="mb-1">Активных счётчиков</h6>
+                                            <h3 class="mb-0">{{ data.meter_count }}</h3>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="kpi-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                                            <h6 class="mb-1">Аномалий</h6>
+                                            <h3 class="mb-0">{{ data.anomaly_count }}</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% elif w_id == 'consumption_chart' %}
+                                <div class="chart-container">
+                                    <canvas id="consumptionChartCanvas" height="200"></canvas>
+                                    <div class="text-end mt-2">
+                                        <button class="btn btn-sm btn-outline-secondary export-chart" data-chart-id="consumptionChartCanvas" data-filename="consumption_chart.png">📸 Экспорт PNG</button>
+                                    </div>
+                                </div>
+                            {% elif w_id == 'resource_pie' %}
+                                <div class="chart-container">
+                                    <canvas id="resourcePieCanvas" height="220"></canvas>
+                                </div>
+                            {% elif w_id == 'top_meters' %}
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover">
+                                        <thead>
+                                            <tr><th>Счётчик</th><th>Потребление</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for item in data %}
+                                            <tr>
+                                                <td><a href="{% url 'energy:meter_detail' item.meter.pk %}">{{ item.meter.serial_number }}</a></td>
+                                                <td>{{ item.consumption|floatformat:2 }} {{ item.unit }}</td>
+                                            </tr>
+                                            {% empty %}<tr><td colspan="2">Нет данных</td></tr>{% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% elif w_id == 'anomaly_table' %}
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-striped">
+                                        <thead>
+                                            <tr><th>Дата</th><th>Счётчик</th><th>Потребление</th><th>Среднее</th><th>Превышение</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for a in data %}
+                                            <td>
+                                                <td>{{ a.date|date:"d.m.Y" }}</td>
+                                                <td><a href="{% url 'energy:meter_detail' a.meter.pk %}">{{ a.meter.serial_number }}</a></td>
+                                                <td>{{ a.consumption|floatformat:2 }} {{ a.meter.resource_type.unit }}</td>
+                                                <td>{{ a.avg|floatformat:2 }} {{ a.meter.resource_type.unit }}</td>
+                                                <td><span class="badge bg-danger">{{ a.ratio|floatformat:1 }}x</span></td>
+                                            </tr>
+                                            {% empty %}<tr><td colspan="5">Нет аномалий</td></tr>{% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% elif w_id == 'recent_readings' %}
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover">
+                                        <thead>
+                                            <tr><th>Счётчик</th><th>Дата</th><th>Потребление</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for r in data %}
+                                            <tr>
+                                                <td><a href="{% url 'energy:meter_detail' r.meter.pk %}">{{ r.meter.serial_number }}</a></td>
+                                                <td>{{ r.date|date:"d.m.Y" }}</td>
+                                                <td>{{ r.consumption|floatformat:2 }} {{ r.unit }}</td>
+                                            </tr>
+                                            {% empty %}<tr><td colspan="3">Нет показаний</td></tr>{% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% endif %}
+                        {% endwith %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Переключение видимости выбора месяца/квартала
+        const periodSelect = document.getElementById('periodSelect');
+        const monthDiv = document.getElementById('monthDiv');
+        const quarterDiv = document.getElementById('quarterDiv');
+        function togglePeriod() {
+            if (periodSelect.value === 'month') {
+                monthDiv.style.display = 'block';
+                quarterDiv.style.display = 'none';
+            } else if (periodSelect.value === 'quarter') {
+                monthDiv.style.display = 'none';
+                quarterDiv.style.display = 'block';
+            } else {
+                monthDiv.style.display = 'none';
+                quarterDiv.style.display = 'none';
+            }
+        }
+        periodSelect.addEventListener('change', togglePeriod);
+        togglePeriod();
+
+        // Сохранение настроек виджетов и порядка
+        function saveDashboardSettings() {
+            const widgets = [];
+            const order = [];
+            document.querySelectorAll('.widget-card').forEach(card => {
+                const wid = card.dataset.widgetId;
+                widgets.push(wid);
+                order.push(wid);
+            });
+            const period = periodSelect.value;
+            const year = document.getElementById('yearSelect').value;
+            const month = document.getElementById('monthSelect')?.value || '';
+            const quarter = document.getElementById('quarterSelect')?.value || '';
+            const resourceType = document.getElementById('resourceTypeSelect').value;
+            const threshold = document.getElementById('thresholdInput').value;
+
+            fetch('{% url "energy:save_dashboard_settings" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                },
+                body: JSON.stringify({
+                    widgets: widgets,
+                    order: order,
+                    period: period,
+                    year: year,
+                    month: month,
+                    quarter: quarter,
+                    resource_type: resourceType,
+                    threshold: threshold,
+                }),
+            }).then(response => response.json()).then(data => {
+                if (data.status === 'ok') console.log('Настройки сохранены');
+            });
+        }
+
+        // Переключение отображения виджетов
+        const checkboxes = document.querySelectorAll('.widget-toggle');
+        checkboxes.forEach(cb => {
+            cb.addEventListener('change', function() {
+                const widgetId = this.value;
+                const card = document.querySelector(`.widget-card[data-widget-id="${widgetId}"]`);
+                if (this.checked) {
+                    if (!card) {
+                        // Виджет нужно добавить – перезагрузка страницы проще
+                        location.reload();
+                    } else {
+                        card.style.display = '';
+                    }
+                } else {
+                    if (card) card.style.display = 'none';
+                }
+                saveDashboardSettings();
+            });
+        });
+
+        // Drag-and-drop сортировка
+        const container = document.getElementById('widgets-container');
+        if (container) {
+            new Sortable(container, {
+                animation: 150,
+                handle: '.widget-header',
+                onEnd: function() {
+                    saveDashboardSettings();
+                }
+            });
+        }
+
+        // Кнопка сохранения расположения
+        document.getElementById('saveLayoutBtn')?.addEventListener('click', function() {
+            saveDashboardSettings();
+            alert('Расположение виджетов сохранено');
+        });
+
+        // Инициализация графиков
+        // График потребления
+        const consumptionCtx = document.getElementById('consumptionChartCanvas')?.getContext('2d');
+        if (consumptionCtx) {
+            new Chart(consumptionCtx, {
+                type: 'line',
+                data: {
+                    labels: {{ widgets_data.consumption_chart.labels|safe }},
+                    datasets: [
+                        {
+                            label: 'Текущий период',
+                            data: {{ widgets_data.consumption_chart.current|safe }},
+                            borderColor: 'rgb(13, 110, 253)',
+                            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                            fill: true,
+                            tension: 0.3
+                        },
+                        {
+                            label: 'Аналогичный период прошлого года',
+                            data: {{ widgets_data.consumption_chart.previous|safe }},
+                            borderColor: 'rgb(220, 53, 69)',
+                            backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                            fill: true,
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: true }
+            });
+        }
+
+        // Круговая диаграмма по типам ресурсов
+        const pieCtx = document.getElementById('resourcePieCanvas')?.getContext('2d');
+        if (pieCtx) {
+            new Chart(pieCtx, {
+                type: 'pie',
+                data: {
+                    labels: {{ widgets_data.resource_pie.labels|safe }},
+                    datasets: [{ data: {{ widgets_data.resource_pie.data|safe }}, backgroundColor: ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6c757d'] }]
+                },
+                options: { responsive: true, maintainAspectRatio: true }
+            });
+        }
+
+        // Экспорт графиков
+        document.querySelectorAll('.export-chart').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const canvasId = this.dataset.chartId;
+                const canvas = document.getElementById(canvasId);
+                if (canvas) {
+                    const link = document.createElement('a');
+                    link.download = this.dataset.filename || 'chart.png';
+                    link.href = canvas.toDataURL();
+                    link.click();
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

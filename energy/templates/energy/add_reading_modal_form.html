@@ -1,2 +1,14 @@
 {% csrf_token %}
+<style>
+    /* Уменьшаем ширину поля даты */
+    #addReadingModalBody #id_date {
+        width: auto;
+        max-width: 200px;
+    }
+    /* Если нужно, чтобы метка тоже была компактной */
+    #addReadingModalBody .field-date label {
+        display: block;
+        margin-bottom: 0.25rem;
+    }
+</style>
 {{ form.as_p }}

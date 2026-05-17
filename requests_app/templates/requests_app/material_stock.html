@@ -7,7 +7,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <h2>📦 Материалы на складе</h2>
     <div>
-        {% if user_role in 'ADMIN,MANAGER,DISPATCHER' %}
+        {% if user_role in 'ADMIN,ENGINEER,DISPATCHER' %}
             <a href="{% url 'requests_app:material_add' %}" class="btn btn-sm btn-warning">
                 <i class="bi bi-plus-circle"></i> Добавить материал
             </a>
@@ -49,7 +49,7 @@
                         <th>Ед. изм.</th>
                         <th>Цена за ед. (₽)</th>
                         <th>Остаток</th>
-                        {% if user_role in 'ADMIN,MANAGER,DISPATCHER' %}
+                        {% if user_role in 'ADMIN,ENGINEER,DISPATCHER' %}
                             <th>Действия</th>
                         {% endif %}
                     </tr>
@@ -62,7 +62,7 @@
                         <td>{{ material.unit }}</td>
                         <td>{{ material.default_price|space_thousands }}</td>
                         <td><strong>{{ material.quantity_in_stock|floatformat:2 }}</strong> {{ material.unit }}</td>
-                        {% if user_role in 'ADMIN,MANAGER,DISPATCHER' %}
+                        {% if user_role in 'ADMIN,ENGINEER,DISPATCHER' %}
                             <td class="text-center">
                                 <a href="{% url 'requests_app:material_edit' material.id %}" class="btn btn-sm btn-outline-primary" title="Редактировать">
                                     <i class="bi bi-pencil"></i>
@@ -75,7 +75,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="{% if user_role in 'ADMIN,MANAGER,DISPATCHER' %}6{% else %}5{% endif %}" class="text-center text-muted py-4">
+                        <td colspan="{% if user_role in 'ADMIN,ENGINEER,DISPATCHER' %}6{% else %}5{% endif %}" class="text-center text-muted py-4">
                             Материалы не найдены
                         </td>
                     </tr>

@@ -141,7 +141,7 @@
                             {% else %}
                                 {{ item.reading.total_consumption|floatformat:2 }}
                             {% endif %}
-                        </td>
+                         </td>
                         {% if can_edit %}
                         <td>
                             <a href="{% url 'energy:reading_edit' item.reading.pk %}?next={{ request.path }}" class="btn btn-sm btn-outline-success" title="Редактировать">
@@ -150,9 +150,9 @@
                             <a href="{% url 'energy:reading_delete' item.reading.pk %}?next={{ request.path }}" class="btn btn-sm btn-outline-danger" title="Удалить">
                                 <i class="bi bi-trash"></i>
                             </a>
-                        </td>
+                         </td>
                         {% endif %}
-                    </tr>
+                     </tr>
                     {% empty %}
                     <tr>
                         <td colspan="5" class="text-center text-muted">Нет показаний</td>
@@ -164,7 +164,7 @@
     </div>
 </div>
 
-<!-- Документы счётчика -->
+<!-- Документы счётчика (с пагинацией и сортировкой по дате: новые сверху) -->
 <div class="card mt-2">
     <div class="card-header bg-light d-flex justify-content-between align-items-center">
         <strong><i class="bi bi-files"></i> Документы</strong>
@@ -186,7 +186,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for doc in meter.documents.all %}
+                    {% for doc in documents_page %}
                     <tr>
                         <td><a href="{{ doc.file.url }}" target="_blank">{{ doc.get_file_name }}</a></td>
                         <td>{{ doc.description|default:"—" }}</td>
@@ -196,9 +196,9 @@
                             <a href="{% url 'energy:delete_document' doc.pk %}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Удалить документ?')">
                                 <i class="bi bi-trash"></i>
                             </a>
-                        </td>
+                         </td>
                         {% endif %}
-                    </tr>
+                     </tr>
                     {% empty %}
                     <tr>
                         <td colspan="4" class="text-center text-muted">Нет загруженных документов</td>
@@ -207,6 +207,29 @@
                 </tbody>
             </table>
         </div>
+        {% if documents_page.has_other_pages %}
+        <div class="pagination justify-content-center mt-3">
+            <nav aria-label="Пагинация документов">
+                <ul class="pagination pagination-sm">
+                    {% if documents_page.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ base_url }}?doc_page={{ documents_page.previous_page_number }}&months={{ selected_months }}&chart_type={{ chart_type }}">«</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">«</span></li>
+                    {% endif %}
+                    <li class="page-item active"><span class="page-link">{{ documents_page.number }}</span></li>
+                    {% if documents_page.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ base_url }}?doc_page={{ documents_page.next_page_number }}&months={{ selected_months }}&chart_type={{ chart_type }}">»</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">»</span></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

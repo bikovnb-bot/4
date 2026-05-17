@@ -58,7 +58,10 @@ class MeterForm(forms.ModelForm):
 # ------------------------------------------------------------
 class ReadingForm(forms.Form):
     meter = forms.ModelChoiceField(queryset=Meter.objects.none(), label="Счётчик")
-    date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}), label="Дата")
+    date = forms.DateField(
+        widget=forms.TextInput(attrs={'class': 'form-control datepicker', 'placeholder': 'дд.мм.гггг'}),
+        label="Дата"
+    )
 
     def __init__(self, user, *args, **kwargs):
         super().__init__(*args, **kwargs)

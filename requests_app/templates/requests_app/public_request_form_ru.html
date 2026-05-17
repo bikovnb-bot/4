@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Подать заявку (без регистрации){% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-container { max-width: 700px; margin: 0 auto; }
+    .lang-switch { text-align: right; margin-bottom: 1rem; }
+    .lang-flag {
+        display: inline-block;
+        margin-left: 12px;
+        text-decoration: none;
+        opacity: 0.6;
+        transition: opacity 0.2s, transform 0.1s;
+        cursor: pointer;
+    }
+    .lang-flag.active {
+        opacity: 1;
+        transform: scale(1.05);
+        filter: drop-shadow(0 0 2px rgba(0,0,0,0.2));
+    }
+    .lang-flag:hover {
+        opacity: 0.9;
+        transform: scale(1.02);
+    }
+    .lang-flag .fi {
+        width: 32px;
+        height: 32px;
+        background-size: contain;
+        vertical-align: middle;
+        border-radius: 2px;
+    }
+    .info-box {
+        background-color: #fff3cd;
+        border-left: 4px solid #ffc107;
+        padding: 12px 15px;
+        margin-bottom: 20px;
+        border-radius: 6px;
+        font-size: 0.9rem;
+    }
+    .card {
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .card-body {
+        padding: 1.8rem;
+    }
+    .btn-primary {
+        border-radius: 50px;
+        padding: 10px;
+        font-weight: 500;
+    }
+    @media (max-width: 768px) {
+        .form-container { padding: 0 15px; }
+        .card-body { padding: 1.2rem; }
+        .lang-flag .fi { width: 28px; height: 28px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="form-container">
+        <div class="lang-switch">
+            <a href="?lang=ru" class="lang-flag {% if lang == 'ru' %}active{% endif %}" title="Русский">
+                <span class="fi fi-ru"></span>
+            </a>
+            <a href="?lang=en" class="lang-flag {% if lang == 'en' %}active{% endif %}" title="English">
+                <span class="fi fi-gb"></span>
+            </a>
+        </div>
+
+        <h2>Подать заявку</h2>
+        <p class="text-muted">Поля, отмеченные <span class="text-danger">*</span>, обязательны.</p>
+
+        <div class="info-box">
+            <i class="bi bi-info-circle-fill" style="margin-right: 8px;"></i>
+            <strong>Внимание!</strong> Заявки принимаются только в рабочее время: <strong>9:30 – 18:00</strong>.<br>
+            Если у Вас что-то случилось в нерабочее время, обратитесь непосредственно к сотрудникам инженерно-технической службы на 1 этаже общежития, к дежурным администраторам или сотрудникам охраны. Вам обязательно помогут.
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    {{ form.honey }}
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.building.id_for_label }}" class="form-label">{{ form.building.label }} <span class="text-danger">*</span></label>
+                                {{ form.building }}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.room_number.id_for_label }}" class="form-label">{{ form.room_number.label }} <span class="text-danger">*</span></label>
+                                {{ form.room_number }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="mb-3">
+                                <label for="{{ form.request_type.id_for_label }}" class="form-label">{{ form.request_type.label }} <span class="text-danger">*</span></label>
+                                {{ form.request_type }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.description.id_for_label }}" class="form-label">{{ form.description.label }} <span class="text-danger">*</span></label>
+                        {{ form.description }}
+                    </div>
+
+                    <hr>
+                    <h5>Контактные данные (необязательно)</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.contact_name.id_for_label }}" class="form-label">{{ form.contact_name.label }}</label>
+                                {{ form.contact_name }}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.contact_phone.id_for_label }}" class="form-label">{{ form.contact_phone.label }}</label>
+                                {{ form.contact_phone }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="id_files" class="form-label">Прикрепить файлы или сделать фото (до 5 МБ, макс. 5 файлов)</label>
+                        <input type="file" name="files" accept="image/*" capture="environment" multiple class="form-control" id="id_files">
+                        <small class="form-text text-muted">На телефоне: сделайте снимок. На компьютере: выберите файл.</small>
+                    </div>
+
+                    <!-- Динамическая капча -->
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="mb-3">
+                                {{ form.captcha_num1 }}
+                                {{ form.captcha_num2 }}
+                                {{ form.captcha_operator }}
+                                <label for="{{ form.captcha_answer.id_for_label }}" class="form-label">{{ form.captcha_answer.label }} <span class="text-danger">*</span></label>
+                                {{ form.captcha_answer }}
+                                {% if form.captcha_answer.errors %}
+                                    <div class="text-danger small">{{ form.captcha_answer.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">Отправить заявку</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

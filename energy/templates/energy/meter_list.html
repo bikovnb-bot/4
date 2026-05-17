@@ -94,6 +94,20 @@
         const saveBtn = document.getElementById('saveReadingBtn');
         let currentMeterId = null;
 
+        // Инициализация flatpickr для всех элементов с классом datepicker внутри модалки
+        function initDatepickers() {
+            const dateFields = modalBody.querySelectorAll('.datepicker');
+            if (dateFields.length && typeof flatpickr !== 'undefined') {
+                dateFields.forEach(field => {
+                    flatpickr(field, {
+                        dateFormat: "d.m.Y",
+                        locale: "ru",
+                        allowInput: true
+                    });
+                });
+            }
+        }
+
         modal.addEventListener('show.bs.modal', async function(event) {
             const button = event.relatedTarget;
             currentMeterId = button.getAttribute('data-meter-id');
@@ -103,6 +117,8 @@
                 const data = await response.json();
                 if (data.html) {
                     modalBody.innerHTML = data.html;
+                    // Инициализация календарей после загрузки формы
+                    initDatepickers();
                 } else {
                     modalBody.innerHTML = '<div class="alert alert-danger">Ошибка загрузки формы</div>';
                 }
@@ -112,8 +128,9 @@
         });
 
         saveBtn.addEventListener('click', async function() {
-            const formHtml = modalBody.querySelector('form');
-            if (!formHtml) {
+            const form = modalBody.querySelector('form');
+            if (!form) {
+                // fallback – собрать данные вручную
                 const formData = new FormData();
                 formData.append('meter', currentMeterId);
                 const inputs = modalBody.querySelectorAll('input, select');
@@ -134,7 +151,6 @@
                     alert('Ошибка: ' + JSON.stringify(result.errors));
                 }
             } else {
-                const form = formHtml;
                 const formData = new FormData(form);
                 if (!formData.has('meter')) formData.append('meter', currentMeterId);
                 const response = await fetch('/energy/add-reading-modal/', {

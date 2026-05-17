@@ -14,9 +14,14 @@
             <a href="{% url 'requests_app:export_excel' %}?{{ request.GET.urlencode }}" class="btn btn-success ms-2">
                 <i class="bi bi-file-excel"></i> Экспорт в Excel
             </a>
-            <a href="{% url 'requests_app:dashboard' %}" class="btn btn-info ms-2">
-                <i class="bi bi-graph-up"></i> Дашборд
-            </a>
+            {% if user_role in 'ADMIN,ENGINEER,DISPATCHER' %}
+                <a href="{% url 'requests_app:dashboard' %}" class="btn btn-info ms-2">
+                    <i class="bi bi-graph-up"></i> Дашборд
+                </a>
+                <a href="{% url 'requests_app:custom_report' %}" class="btn btn-outline-info ms-2">
+                    <i class="bi bi-file-earmark-text"></i> Отчёты
+                </a>
+            {% endif %}
         </div>
     </div>
 
@@ -122,11 +127,7 @@
                                 </span>
                             </td>
                             <td class="text-center">
-                                {% if req.created_by %}
-                                    {{ req.created_by.get_full_name|default:req.created_by.username }}
-                                {% else %}
-                                    —
-                                {% endif %}
+                                {{ req.get_creator_display }}
                             </td>
                             <td class="text-center assigned-to-name-{{ req.id }}">
                                 {% if req.assigned_to %}
@@ -192,8 +193,8 @@
     <div id="menu-assign" style="display: none;">
         <a href="#" class="menu-item" data-action="assign"><i class="bi bi-person-plus me-2"></i> Назначить исполнителя</a>
     </div>
-    <div id="menu-mark-completed" style="display: none;">
-        <a href="#" class="menu-item" data-action="mark-completed"><i class="bi bi-check-circle me-2"></i> Отметить выполненной</a>
+    <div id="menu-complete" style="display: none;">
+        <a href="#" class="menu-item" data-action="complete"><i class="bi bi-check-circle me-2"></i> Отметить выполненной</a>
     </div>
     <div id="menu-suspend" style="display: none;">
         <a href="#" class="menu-item" data-action="suspend"><i class="bi bi-pause-circle me-2"></i> Приостановить</a>
@@ -202,8 +203,8 @@
         <a href="#" class="menu-item" data-action="resume"><i class="bi bi-play-circle me-2"></i> Возобновить</a>
     </div>
     <div id="menu-close" style="display: none;">
-    <a href="#" class="menu-item" data-action="close"><i class="bi bi-check2-circle me-2"></i> Закрыть заявку</a>
-</div>
+        <a href="#" class="menu-item" data-action="close"><i class="bi bi-check2-circle me-2"></i> Закрыть заявку</a>
+    </div>
 </div>
 
 <!-- Модальное окно для выбора исполнителя -->
@@ -241,11 +242,12 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ all_users|json_script:"all-users-data" }}
 <script>
     (function() {
         const userRole = "{{ user_role|default:'VIEWER' }}";
         const currentUserId = {{ request.user.id }};
-        const allUsers = {{ all_users|safe }};
+        const allUsers = JSON.parse(document.getElementById('all-users-data').textContent);
         const csrfToken = "{{ csrf_token }}";
 
         let activeRequestId = null;
@@ -257,25 +259,29 @@
         // Функция доступных действий
         function getAvailableActions(status, assignedTo) {
             if (userRole === 'ADMIN') {
-                return ['assign', 'mark-completed', 'suspend', 'resume', 'close'];
+                if (status === 'closed') return ['resume'];
+                const actions = [];
+                if (status === 'new' || status === 'in_progress') actions.push('assign');
+                if (status === 'in_progress') actions.push('complete', 'suspend');
+                if (status === 'suspended') actions.push('resume');
+                if (status === 'completed') actions.push('close');
+                return actions;
             }
             
-            const isManagerDispatcher = ['MANAGER', 'DISPATCHER'].includes(userRole);
+            const isManagerDispatcher = ['ENGINEER', 'DISPATCHER'].includes(userRole);
             const isExecutor = (assignedTo && assignedTo == currentUserId);
             
             if (isManagerDispatcher) {
                 const actions = [];
                 if (status === 'new' || status === 'in_progress') actions.push('assign');
-                if (status === 'in_progress') {
-                    actions.push('mark-completed', 'suspend');
-                }
+                if (status === 'in_progress') actions.push('complete', 'suspend');
                 if (status === 'suspended') actions.push('resume');
                 if (status === 'completed') actions.push('close');
                 return actions;
             }
             
             if (status === 'in_progress' && isExecutor) {
-                return ['mark-completed', 'suspend'];
+                return ['complete', 'suspend'];
             }
             
             return [];
@@ -288,7 +294,7 @@
             const actions = getAvailableActions(status, assignedTo);
             document.querySelectorAll('#status-context-menu > div').forEach(div => div.style.display = 'none');
             if (actions.includes('assign')) document.getElementById('menu-assign').style.display = 'block';
-            if (actions.includes('mark-completed')) document.getElementById('menu-mark-completed').style.display = 'block';
+            if (actions.includes('complete')) document.getElementById('menu-complete').style.display = 'block';
             if (actions.includes('suspend')) document.getElementById('menu-suspend').style.display = 'block';
             if (actions.includes('resume')) document.getElementById('menu-resume').style.display = 'block';
             if (actions.includes('close')) document.getElementById('menu-close').style.display = 'block';
@@ -395,10 +401,10 @@
                     return;
                 }
                 const urls = {
-                    'mark-completed': `/requests/${activeRequestId}/mark-completed/`,
-                    suspend: `/requests/${activeRequestId}/suspend/`,
-                    resume: `/requests/${activeRequestId}/resume/`,
-                    close: `/requests/${activeRequestId}/close/`
+                    'complete': `/requests/${activeRequestId}/complete/`,
+                    'suspend': `/requests/${activeRequestId}/suspend/`,
+                    'resume': `/requests/${activeRequestId}/resume/`,
+                    'close': `/requests/${activeRequestId}/close/`
                 };
                 const url = urls[action];
                 if (!url) return;
@@ -412,7 +418,7 @@
                         document.body.appendChild(form);
                         form.submit();
                     }
-                } else if (action === 'mark-completed') {
+                } else if (action === 'complete') {
                     fetch(url, {
                         method: 'POST',
                         headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' }

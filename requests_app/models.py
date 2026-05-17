@@ -52,6 +52,11 @@ class ServiceRequest(models.Model):
     time_spent = models.PositiveIntegerField(null=True, blank=True, verbose_name="Затраченное время (минуты)")
     suspension_reason = models.TextField(blank=True, null=True, verbose_name="Причина приостановки")
 
+    # Поля для публичных заявок (без авторизации)
+    contact_name = models.CharField(max_length=200, blank=True, null=True, verbose_name="Контактное лицо")
+    contact_phone = models.CharField(max_length=20, blank=True, null=True, verbose_name="Телефон")
+    ip_address = models.GenericIPAddressField(blank=True, null=True, verbose_name="IP адрес")
+
     class Meta:
         ordering = ['-created_at']
         verbose_name = "Заявка"
@@ -73,6 +78,20 @@ class ServiceRequest(models.Model):
                 material.save()
         self.used_materials.all().delete()
 
+    def get_creator_display(self):
+        """
+        Возвращает отображаемое имя создателя заявки:
+        - если заявка создана авторизованным пользователем – его ФИО или username;
+        - если создана через публичную форму и указано контактное лицо – его имя;
+        - иначе – "Публичная".
+        """
+        if self.created_by:
+            return self.created_by.get_full_name() or self.created_by.username
+        elif self.contact_name:
+            return self.contact_name
+        else:
+            return "Публичная"
+
     def __str__(self):
         return f"{self.request_number} - {self.building}"
 
@@ -80,7 +99,7 @@ class ServiceRequest(models.Model):
 # Модель для множественных исполнителей
 class RequestAssignee(models.Model):
     request = models.ForeignKey(ServiceRequest, on_delete=models.CASCADE, related_name='assignees')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='assigned_to_requests')  # изменено
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='assigned_to_requests')
     assigned_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -123,7 +142,7 @@ class Material(models.Model):
 class UsedMaterial(models.Model):
     request = models.ForeignKey(ServiceRequest, on_delete=models.CASCADE, related_name='used_materials')
     material = models.ForeignKey(Material, on_delete=models.CASCADE, verbose_name="Материал")
-    name = models.CharField(max_length=200, verbose_name="Наименование")  # историческая копия
+    name = models.CharField(max_length=200, verbose_name="Наименование")
     quantity = models.DecimalField(max_digits=10, decimal_places=2)
     unit = models.CharField(max_length=20)
     price_per_unit = models.DecimalField(max_digits=10, decimal_places=2)

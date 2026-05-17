@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Удаление счётчика{% endblock %}
+{% block title %}Удаление показания{% endblock %}
 
 {% block content %}
 <div class="card border-danger shadow-sm">
@@ -7,12 +7,12 @@
         <h4 class="mb-0">Подтверждение удаления</h4>
     </div>
     <div class="card-body">
-        <p>Вы действительно хотите удалить счётчик <strong>{{ meter.serial_number }}</strong>?</p>
-        <p class="text-danger">Все связанные показания также будут удалены.</p>
+        <p>Вы действительно хотите удалить показание счётчика <strong>{{ reading.meter.serial_number }}</strong> от <strong>{{ reading.date|date:"d.m.Y" }}</strong>?</p>
+        <p class="text-danger">Это действие нельзя отменить.</p>
         <form method="post">
             {% csrf_token %}
             <button type="submit" class="btn btn-danger">Да, удалить</button>
-            <a href="{% url 'energy:meter_list' %}" class="btn btn-secondary">Отмена</a>
+            <a href="{% if request.GET.next %}{{ request.GET.next }}{% else %}{% url 'energy:meter_detail' reading.meter.pk %}{% endif %}" class="btn btn-secondary">Отмена</a>
         </form>
     </div>
 </div>

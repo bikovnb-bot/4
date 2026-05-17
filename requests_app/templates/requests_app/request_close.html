@@ -73,8 +73,9 @@
     </form>
 </div>
 
+{{ materials_json|json_script:"materials-data" }}
 <script>
-    const materialsData = {{ materials_json|safe }};
+    const materialsData = JSON.parse(document.getElementById('materials-data').textContent);
     const tbody = document.getElementById('materials-tbody');
     let rowCounter = 0;
 
@@ -110,8 +111,14 @@
         const priceInput = row.querySelector('.material-price');
         const removeBtn = row.querySelector('.remove-row');
 
-        function updateMaterialData() {
-            const inputName = nameInput.value;
+        function refreshMaterialFields() {
+            const inputName = nameInput.value.trim();
+            if (!inputName) {
+                idHidden.value = '';
+                unitInput.value = '';
+                priceInput.value = '';
+                return;
+            }
             const material = materialsData.find(m => m.name === inputName);
             if (material) {
                 idHidden.value = material.id;
@@ -124,14 +131,8 @@
             }
         }
 
-        nameInput.addEventListener('change', updateMaterialData);
-        nameInput.addEventListener('input', function() {
-            if (this.value === '') {
-                idHidden.value = '';
-                unitInput.value = '';
-                priceInput.value = '';
-            }
-        });
+        nameInput.addEventListener('input', refreshMaterialFields);
+        nameInput.addEventListener('change', refreshMaterialFields);
 
         removeBtn.addEventListener('click', () => row.remove());
     }

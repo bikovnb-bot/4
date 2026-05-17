@@ -11,6 +11,8 @@
     <link rel="stylesheet" href="{% static 'css/custom.css' %}">
     <!-- flatpickr CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <!-- Флаги стран -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.3.2/css/flag-icons.min.css">
     <!-- PWA манифест и мета-теги -->
     <link rel="manifest" href="{% static 'manifest.json' %}">
     <meta name="theme-color" content="#0d6efd">
@@ -54,7 +56,8 @@
     </style>
 </head>
 <body>
-    <!-- Навигационная панель светлая, фиксированная -->
+    <!-- Навигационная панель – отображается только если не передан флаг hide_navbar -->
+    {% if not hide_navbar %}
     <nav class="navbar navbar-expand-lg navbar-light bg-light fixed-top">
         <div class="container">
             <a class="navbar-brand" href="{% url 'core:home' %}">
@@ -65,27 +68,31 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
+                    <!-- Главная -->
                     <li class="nav-item">
                         <a class="nav-link {% if request.resolver_match.app_name == 'core' and request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'core:home' %}">
-                            <i class="bi bi-house"></i> Главная
-                        </a>
-                    </li>
-                    <!-- Дашборд -->
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.app_name == 'exploitation_app' and request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'exploitation_app:dashboard' %}">
-                            <i class="bi bi-speedometer2"></i> Дашборд
+                            <i class="bi bi-house-door"></i> Главная
                         </a>
                     </li>
                     <!-- Договоры (выпадающее меню) -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'exploitation_app' and request.resolver_match.url_name != 'dashboard' %}active{% endif %}" href="#" id="contractsDropdown" role="button" data-bs-toggle="dropdown">
+                        <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'exploitation_app' %}active{% endif %}" href="#" id="contractsDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-file-text"></i> Договоры
                         </a>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{% url 'exploitation_app:contract_list' %}">Список договоров</a></li>
+                            <li><a class="dropdown-item" href="{% url 'exploitation_app:dashboard' %}">
+                                <i class="bi bi-speedometer2"></i> Дашборд
+                            </a></li>
                             <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{% url 'exploitation_app:contract_report_advanced' %}">Расширенный отчёт</a></li>
-                            <li><a class="dropdown-item" href="{% url 'exploitation_app:year_over_year_report' %}">Сравнение оплат</a></li>
+                            <li><a class="dropdown-item" href="{% url 'exploitation_app:contract_list' %}">
+                                <i class="bi bi-table"></i> Список договоров
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'exploitation_app:contract_report_advanced' %}">
+                                <i class="bi bi-bar-chart-steps"></i> Расширенный отчёт
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'exploitation_app:year_over_year_report' %}">
+                                <i class="bi bi-calendar-range"></i> Сравнение оплат
+                            </a></li>
                         </ul>
                     </li>
                     <!-- Приборы учёта (выпадающее меню) -->
@@ -94,28 +101,54 @@
                             <i class="bi bi-battery-charging"></i> Приборы учёта
                         </a>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{% url 'energy:meter_list' %}">Список приборов</a></li>
+                            <li><a class="dropdown-item" href="{% url 'energy:meter_list' %}">
+                                <i class="bi bi-grid-3x3-gap-fill"></i> Список приборов
+                            </a></li>
                             <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{% url 'energy:consumption_report' %}">Отчёт по потреблению</a></li>
-                            <li><a class="dropdown-item" href="{% url 'energy:anomaly_report' %}">Аномалии потребления</a></li>
-                            <li><a class="dropdown-item" href="{% url 'energy:import_readings' %}">Импорт показаний</a></li>
-                            <li><a class="dropdown-item" href="{% url 'energy:export_readings' %}">Экспорт истории</a></li>
+                            <li><a class="dropdown-item" href="{% url 'energy:consumption_report' %}">
+                                <i class="bi bi-graph-up"></i> Отчёт по потреблению
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'energy:anomaly_report' %}">
+                                <i class="bi bi-exclamation-triangle"></i> Аномалии потребления
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'energy:import_readings' %}">
+                                <i class="bi bi-upload"></i> Импорт показаний
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'energy:export_readings' %}">
+                                <i class="bi bi-download"></i> Экспорт истории
+                            </a></li>
                         </ul>
                     </li>
                     <!-- Заявки (выпадающее меню) -->
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'requests_app' %}active{% endif %}" href="#" id="requestsDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-clipboard"></i> Заявки
-                        </a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{% url 'requests_app:request_list' %}">Список заявок</a></li>
-                            <li><a class="dropdown-item" href="{% url 'requests_app:dashboard' %}">Дашборд</a></li>
-                            <li><a class="dropdown-item" href="{% url 'requests_app:request_create' %}">Новая заявка</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{% url 'requests_app:material_stock' %}">Материалы на складе</a></li>
-                            <li><a class="dropdown-item" href="{% url 'requests_app:custom_report' %}">Настраиваемый отчёт</a></li>
-                        </ul>
-                    </li>
+<li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'requests_app' %}active{% endif %}" href="#" id="requestsDropdown" role="button" data-bs-toggle="dropdown">
+        <i class="bi bi-clipboard"></i> Заявки
+    </a>
+    <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="{% url 'requests_app:request_list' %}">
+            <i class="bi bi-list-ul"></i> Список заявок
+        </a></li>
+        <li><a class="dropdown-item" href="{% url 'requests_app:dashboard' %}">
+            <i class="bi bi-speedometer2"></i> Дашборд
+        </a></li>
+        <li><a class="dropdown-item" href="{% url 'requests_app:request_create' %}">
+            <i class="bi bi-plus-circle"></i> Новая заявка
+        </a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="{% url 'requests_app:material_stock' %}">
+            <i class="bi bi-box-seam"></i> Материалы на складе
+        </a></li>
+        <li><a class="dropdown-item" href="{% url 'requests_app:custom_report' %}">
+            <i class="bi bi-sliders2"></i> Настраиваемый отчёт
+        </a></li>
+        {% if user.is_authenticated and user.profile.role == 'ADMIN' %}
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="{% url 'requests_app:public_request_create' %}?lang=ru">
+            <i class="bi bi-envelope-paper"></i> Публичная форма
+        </a></li>
+        {% endif %}
+    </ul>
+</li>
                     <!-- Администрирование (выпадающее меню, только для определённых ролей) -->
                     {% if is_admin or user.is_staff %}
                     <li class="nav-item dropdown">
@@ -124,10 +157,14 @@
                         </a>
                         <ul class="dropdown-menu">
                             {% if is_admin %}
-                            <li><a class="dropdown-item" href="{% url 'users:user_list' %}">Пользователи</a></li>
+                            <li><a class="dropdown-item" href="{% url 'users:user_list' %}">
+                                <i class="bi bi-people"></i> Пользователи
+                            </a></li>
                             {% endif %}
                             {% if user.is_staff %}
-                            <li><a class="dropdown-item" href="/admin/">Админка Django</a></li>
+                            <li><a class="dropdown-item" href="/admin/">
+                                <i class="bi bi-shield-lock"></i> Админка Django
+                            </a></li>
                             {% endif %}
                         </ul>
                     </li>
@@ -142,7 +179,7 @@
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end">
                                 <li>
-                                    <a class="dropdown-item" href="{% url 'users:profile' %}">
+                                    <a class="dropdown-item" href="{% url 'users:profile_edit' %}">
                                         <i class="bi bi-person-circle"></i> Мой профиль
                                     </a>
                                 </li>
@@ -159,13 +196,14 @@
                         </div>
                     {% else %}
                         <a href="{% url 'login' %}" class="btn btn-outline-primary btn-sm">
-                            🔑 Войти
+                            <i class="bi bi-key"></i> Войти
                         </a>
                     {% endif %}
                 </div>
             </div>
         </div>
     </nav>
+    {% endif %}  <!-- конец условия hide_navbar -->
 
     <main class="container mt-4">
         {% if messages %}

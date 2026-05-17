@@ -11,14 +11,32 @@
     </div>
     <div class="card shadow-sm">
         <div class="card-body">
-            <form method="post" novalidate>
+            <form method="post" novalidate enctype="multipart/form-data">
                 {% csrf_token %}
-                {% for field in form %}
+
+                <!-- Блок: основная информация (User) -->
+                <h5 class="mb-3 border-bottom pb-2">Основная информация</h5>
+                {% for field in user_form %}
                     <div class="mb-3">
                         {{ field.label_tag }}
                         {{ field }}
-                        {% if field.field.help_text %}
-                            <div class="form-text text-muted small">{{ field.field.help_text|safe }}</div>
+                        {% if field.help_text %}
+                            <div class="form-text text-muted small">{{ field.help_text|safe }}</div>
+                        {% endif %}
+                        {% if field.errors %}
+                            <div class="invalid-feedback d-block">{{ field.errors }}</div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+
+                <!-- Блок: профиль (роль, телефон, должность) -->
+                <h5 class="mt-4 mb-3 border-bottom pb-2">Профиль</h5>
+                {% for field in profile_form %}
+                    <div class="mb-3">
+                        {{ field.label_tag }}
+                        {{ field }}
+                        {% if field.help_text %}
+                            <div class="form-text text-muted small">{{ field.help_text|safe }}</div>
                         {% endif %}
                         {% if field.errors %}
                             <div class="invalid-feedback d-block">{{ field.errors }}</div>
@@ -29,19 +47,24 @@
                         {% endif %}
                     </div>
                 {% endfor %}
-                <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Сохранить</button>
-                <a href="{% url 'users:user_list' %}" class="btn btn-outline-secondary">Отмена</a>
+
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Сохранить</button>
+                    <a href="{% url 'users:user_list' %}" class="btn btn-outline-secondary">Отмена</a>
+                </div>
             </form>
         </div>
     </div>
 </div>
 
 <script>
+    // Описания ролей (новые)
     const roleDescriptions = {
         'ADMIN': '🔹 Администратор — полный доступ ко всем функциям системы: управление пользователями, группами, договорами, отчётами, настройками.',
-        'MANAGER': '🔹 Менеджер — может создавать и редактировать договоры, просматривать отчёты, управлять заявками, но не может изменять роли других пользователей.',
-        'VIEWER': '🔹 Наблюдатель — только просмотр договоров, отчётов и заявок. Не может создавать, редактировать или удалять.',
-        'CONTRACTOR': '🔹 Исполнитель — доступ только к своим договорам (по полю "исполнитель" или контактное лицо). Может просматривать и добавлять отчёты по выполнению.'
+        'CONTRACT_SPECIALIST': '🔹 Специалист по договорам — управление договорами и счётчиками (создание, редактирование, просмотр). Нет доступа к заявкам.',
+        'ENGINEER': '🔹 Инженер — просмотр договоров, полный доступ к заявкам, управление счётчиками.',
+        'DISPATCHER': '🔹 Диспетчер — полный доступ к заявкам (создание, назначение, закрытие). Без доступа к договорам и счётчикам.',
+        'WORKER': '🔹 Рабочий — доступ только к назначенным на него заявкам (просмотр, выполнение).'
     };
     document.addEventListener('DOMContentLoaded', function() {
         const roleSelect = document.querySelector('select[name="role"]');

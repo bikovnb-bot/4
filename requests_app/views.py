@@ -1,6 +1,8 @@
+import os
 import json
+import random
 from decimal import Decimal
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 import openpyxl
 
 from django.shortcuts import render, get_object_or_404, redirect
@@ -12,33 +14,58 @@ from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.core.paginator import Paginator
+from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.cache import never_cache
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.conf import settings
+from django.urls import reverse
+from openpyxl.utils import get_column_letter
 
 from .models import ServiceRequest, UsedMaterial, Material, RequestType, RequestHistory, RequestFile, RequestAssignee
 from .forms import (
     ServiceRequestForm, UsedMaterialFormSet, ReportForm,
-    ImportMaterialsForm, MaterialForm, RequestFileForm
+    ImportMaterialsForm, MaterialForm, RequestFileForm, PublicRequestForm
 )
+from .utils import rate_limit
+from .translator import translate_to_russian
 from users.models import UserRole
 from buildings.models import Building
+
+
+def generate_new_captcha(lang='ru'):
+    operators = ['+', '-', '*']
+    op = random.choice(operators)
+    if op == '+':
+        a = random.randint(1, 20)
+        b = random.randint(1, 20)
+    elif op == '-':
+        a = random.randint(5, 20)
+        b = random.randint(1, a)
+    else:
+        a = random.randint(1, 10)
+        b = random.randint(1, 10)
+    return {
+        'captcha_num1': a,
+        'captcha_num2': b,
+        'captcha_operator': op,
+    }
 
 
 @login_required
 def request_list(request):
     user = request.user
-    role = user.profile.role if hasattr(user, 'profile') else UserRole.VIEWER
-
+    role = user.profile.role if hasattr(user, 'profile') else None
     qs = ServiceRequest.objects.select_related('building', 'created_by', 'assigned_to')
-
-    if role == UserRole.CONTRACTOR:
+    if role == UserRole.WORKER:
         qs = qs.filter(Q(assigned_to=user) | Q(assignees__user=user)).distinct()
-    elif role == UserRole.VIEWER:
+    elif role not in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]:
         qs = qs.filter(created_by=user)
 
     status = request.GET.get('status')
     executor = request.GET.get('executor')
     priority = request.GET.get('priority')
     search = request.GET.get('search')
-
     if status:
         qs = qs.filter(status=status)
     if executor:
@@ -51,7 +78,7 @@ def request_list(request):
             Q(description__icontains=search)
         )
 
-    executors = User.objects.filter(profile__role=UserRole.CONTRACTOR).order_by('username')
+    executors = User.objects.filter(profile__role=UserRole.WORKER).order_by('username')
     status_choices = ServiceRequest.STATUS_CHOICES
     priority_choices = ServiceRequest.PRIORITY_CHOICES
 
@@ -88,7 +115,6 @@ def request_create(request):
             req.status = 'new'
             req.created_at = timezone.now()
             req.save()
-
             files = request.FILES.getlist('files')
             for f in files:
                 RequestFile.objects.create(
@@ -103,7 +129,6 @@ def request_create(request):
             messages.error(request, 'Ошибка в форме.')
     else:
         form = ServiceRequestForm(request.user)
-
     return render(request, 'requests_app/request_form.html', {'form': form, 'title': 'Создание заявки'})
 
 
@@ -112,12 +137,10 @@ def request_edit(request, pk):
     req = get_object_or_404(ServiceRequest, pk=pk)
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else None
-
     if req.status == 'closed' and role != UserRole.ADMIN:
         messages.error(request, 'Только администратор может редактировать закрытую заявку.')
         return redirect('requests_app:request_detail', pk=pk)
-
-    if not (role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER] or req.created_by == user):
+    if not (role in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER] or req.created_by == user):
         messages.error(request, 'Нет прав на редактирование.')
         return redirect('requests_app:request_detail', pk=pk)
 
@@ -126,7 +149,6 @@ def request_edit(request, pk):
         if form.is_valid():
             req = form.save(commit=False)
             req.save()
-
             delete_files = request.POST.getlist('delete_files')
             for file_id in delete_files:
                 try:
@@ -135,7 +157,6 @@ def request_edit(request, pk):
                     file_obj.delete()
                 except RequestFile.DoesNotExist:
                     pass
-
             new_files = request.FILES.getlist('files')
             for f in new_files:
                 RequestFile.objects.create(
@@ -144,12 +165,10 @@ def request_edit(request, pk):
                     uploaded_by=request.user,
                     description=''
                 )
-
             messages.success(request, 'Заявка обновлена.')
             return redirect('requests_app:request_detail', pk=req.pk)
     else:
         form = ServiceRequestForm(request.user, instance=req)
-
     return render(request, 'requests_app/request_form.html', {
         'form': form,
         'title': 'Редактирование заявки',
@@ -163,31 +182,26 @@ def request_edit(request, pk):
 def request_detail(request, pk):
     req = get_object_or_404(ServiceRequest.objects.select_related('building', 'created_by', 'assigned_to'), pk=pk)
     user = request.user
-    role = user.profile.role if hasattr(user, 'profile') else UserRole.VIEWER
-
-    # Проверка доступа
-    if role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]:
-        if role == UserRole.CONTRACTOR:
+    role = user.profile.role if hasattr(user, 'profile') else None
+    if role not in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]:
+        if role == UserRole.WORKER:
             if not (req.assigned_to == user or req.assignees.filter(user=user).exists()):
                 messages.error(request, 'Нет доступа.')
                 return redirect('requests_app:request_list')
-        elif role == UserRole.VIEWER and req.created_by != user:
-            messages.error(request, 'Нет доступа.')
-            return redirect('requests_app:request_list')
-
+        else:
+            if req.created_by != user:
+                messages.error(request, 'Нет доступа.')
+                return redirect('requests_app:request_list')
     materials_formset = UsedMaterialFormSet(instance=req)
-
-    can_assign = role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER] and req.status in ['new', 'in_progress']
+    can_assign = role in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER] and req.status in ['new', 'in_progress']
     is_executor = (req.assigned_to == user or req.assignees.filter(user=user).exists())
-    can_mark_completed = (is_executor or role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]) and req.status == 'in_progress'
-    can_suspend = (is_executor or role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]) and req.status == 'in_progress'
-    can_resume = role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER] and req.status == 'suspended'
-    can_close = role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER] and req.status == 'completed'
-    can_edit = (role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER] or req.created_by == user) and not (req.status == 'closed' and role != UserRole.ADMIN)
-
+    can_mark_completed = (is_executor or role in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]) and req.status == 'in_progress'
+    can_suspend = (is_executor or role in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]) and req.status == 'in_progress'
+    can_resume = role in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER] and req.status == 'suspended'
+    can_close = role in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER] and req.status == 'completed'
+    can_edit = (role in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER] or req.created_by == user) and not (req.status == 'closed' and role != UserRole.ADMIN)
     history = req.history.all()[:30]
     assignees = req.assignees.all()
-
     context = {
         'req': req,
         'request_obj': req,
@@ -211,11 +225,9 @@ def request_delete(request, pk):
     req = get_object_or_404(ServiceRequest, pk=pk)
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else None
-
-    if not (role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER] or req.created_by == user):
+    if not (role in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER] or req.created_by == user):
         messages.error(request, 'Нет прав на удаление.')
         return redirect('requests_app:request_list')
-
     if request.method == 'POST':
         RequestHistory.objects.create(
             request=req,
@@ -225,7 +237,6 @@ def request_delete(request, pk):
         req.delete()
         messages.success(request, f'Заявка {req.request_number} удалена.')
         return redirect('requests_app:request_list')
-
     return render(request, 'requests_app/request_confirm_delete.html', {'req': req})
 
 
@@ -234,14 +245,11 @@ def request_assign(request, pk):
     req = get_object_or_404(ServiceRequest, pk=pk)
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else None
-
-    if role != UserRole.ADMIN:
-        if role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER] or req.status not in ['new', 'in_progress']:
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return JsonResponse({'success': False, 'message': 'Нет прав или неверный статус'})
-            messages.error(request, 'Нет прав для назначения.')
-            return redirect('requests_app:request_detail', pk=pk)
-
+    if role not in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER] or req.status not in ['new', 'in_progress']:
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'success': False, 'message': 'Нет прав или неверный статус'})
+        messages.error(request, 'Нет прав для назначения.')
+        return redirect('requests_app:request_detail', pk=pk)
     if request.method == 'POST':
         assigned_to_id = request.POST.get('assigned_to')
         if assigned_to_id:
@@ -263,7 +271,6 @@ def request_assign(request, pk):
                 return JsonResponse({'success': False, 'message': 'Выберите исполнителя'})
             messages.error(request, 'Выберите исполнителя.')
         return redirect('requests_app:request_detail', pk=pk)
-
     return redirect('requests_app:request_detail', pk=pk)
 
 
@@ -272,15 +279,12 @@ def request_mark_completed(request, pk):
     req = get_object_or_404(ServiceRequest, pk=pk)
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else None
-
     is_executor = (req.assigned_to == user or req.assignees.filter(user=user).exists())
-    if role != UserRole.ADMIN:
-        if not (is_executor or role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]) or req.status != 'in_progress':
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return JsonResponse({'success': False, 'message': 'Нет прав или неверный статус'})
-            messages.error(request, 'Нет прав для отметки выполнения.')
-            return redirect('requests_app:request_detail', pk=pk)
-
+    if not (is_executor or role in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]) or req.status != 'in_progress':
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'success': False, 'message': 'Нет прав или неверный статус'})
+        messages.error(request, 'Нет прав для отметки выполнения.')
+        return redirect('requests_app:request_detail', pk=pk)
     if request.method == 'POST':
         req.status = 'completed'
         req.completed_date = timezone.now()
@@ -297,7 +301,6 @@ def request_mark_completed(request, pk):
             return JsonResponse({'success': True, 'message': 'Заявка отмечена выполненной'})
         messages.success(request, 'Заявка выполнена.')
         return redirect('requests_app:request_detail', pk=pk)
-
     return redirect('requests_app:request_detail', pk=pk)
 
 
@@ -306,15 +309,12 @@ def request_suspend(request, pk):
     req = get_object_or_404(ServiceRequest, pk=pk)
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else None
-
     is_executor = (req.assigned_to == user or req.assignees.filter(user=user).exists())
-    if role != UserRole.ADMIN:
-        if not (is_executor or role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]) or req.status != 'in_progress':
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return JsonResponse({'success': False, 'message': 'Нет прав для приостановки'})
-            messages.error(request, 'Нет прав для приостановки.')
-            return redirect('requests_app:request_detail', pk=pk)
-
+    if not (is_executor or role in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]) or req.status != 'in_progress':
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'success': False, 'message': 'Нет прав для приостановки'})
+        messages.error(request, 'Нет прав для приостановки.')
+        return redirect('requests_app:request_detail', pk=pk)
     if request.method == 'POST':
         reason = request.POST.get('suspension_reason', '').strip()
         if not reason:
@@ -334,7 +334,6 @@ def request_suspend(request, pk):
                 return JsonResponse({'success': True, 'message': 'Заявка приостановлена'})
             messages.success(request, f'Заявка №{req.request_number} приостановлена.')
             return redirect('requests_app:request_detail', pk=pk)
-
     return render(request, 'requests_app/request_suspend.html', {'req': req})
 
 
@@ -343,27 +342,32 @@ def request_resume(request, pk):
     req = get_object_or_404(ServiceRequest, pk=pk)
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else None
-
-    if role != UserRole.ADMIN:
-        if role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER] or req.status != 'suspended':
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return JsonResponse({'success': False, 'message': 'Нет прав для возобновления'})
-            messages.error(request, 'Нет прав для возобновления заявки.')
-            return redirect('requests_app:request_detail', pk=pk)
-
+    if role not in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]:
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'success': False, 'message': 'Нет прав для возобновления'})
+        messages.error(request, 'Нет прав для возобновления заявки.')
+        return redirect('requests_app:request_detail', pk=pk)
+    allowed_statuses = ['suspended']
+    if role == UserRole.ADMIN:
+        allowed_statuses.append('closed')
+    if req.status not in allowed_statuses:
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'success': False, 'message': 'Заявку нельзя возобновить'})
+        messages.error(request, 'Заявку нельзя возобновить.')
+        return redirect('requests_app:request_detail', pk=pk)
     if request.method == 'POST':
+        old_status = req.status
         req.status = 'in_progress'
         req.save()
         RequestHistory.objects.create(
             request=req,
             user=request.user,
-            action='Заявка возобновлена',
+            action='Заявка возобновлена' + (' (после закрытия)' if old_status == 'closed' else ''),
         )
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({'success': True, 'message': 'Заявка возобновлена'})
         messages.success(request, f'Заявка №{req.request_number} возобновлена.')
         return redirect('requests_app:request_detail', pk=pk)
-
     return render(request, 'requests_app/request_resume.html', {'req': req})
 
 
@@ -372,23 +376,19 @@ def request_close(request, pk):
     req = get_object_or_404(ServiceRequest, pk=pk)
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else None
-
-    if role != UserRole.ADMIN and role not in [UserRole.MANAGER, UserRole.DISPATCHER]:
+    if role not in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]:
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({'success': False, 'message': 'Нет прав для закрытия'})
         messages.error(request, 'Нет прав для закрытия заявки.')
         return redirect('requests_app:request_detail', pk=pk)
-
     if req.status != 'completed':
         messages.error(request, 'Закрыть можно только выполненную заявку.')
         return redirect('requests_app:request_detail', pk=pk)
-
     if request.method == 'POST':
         material_ids = request.POST.getlist('material_id[]')
         quantities = request.POST.getlist('material_quantity[]')
         units = request.POST.getlist('material_unit[]')
         prices = request.POST.getlist('material_price[]')
-
         materials_used = False
         with transaction.atomic():
             for mat_id, qty_str, unit, price_str in zip(material_ids, quantities, units, prices):
@@ -405,11 +405,9 @@ def request_close(request, pk):
                 except (Material.DoesNotExist, ValueError, TypeError):
                     messages.error(request, f'Материал с ID {mat_id} не найден.')
                     return redirect('requests_app:request_close', pk=req.pk)
-
                 if material.quantity_in_stock < qty:
                     messages.error(request, f'Недостаточно материала "{material.name}" на складе (доступно: {material.quantity_in_stock} {material.unit})')
                     return redirect('requests_app:request_close', pk=req.pk)
-
                 UsedMaterial.objects.create(
                     request=req,
                     material=material,
@@ -421,7 +419,6 @@ def request_close(request, pk):
                 material.quantity_in_stock -= qty
                 material.save()
                 materials_used = True
-
         req.status = 'closed'
         req.save()
         RequestHistory.objects.create(
@@ -431,9 +428,8 @@ def request_close(request, pk):
         )
         messages.success(request, f'Заявка #{req.request_number} закрыта.')
         return redirect('requests_app:request_detail', pk=req.pk)
-
     materials_qs = Material.objects.all().values('id', 'name', 'unit', 'default_price')
-    materials_json = json.dumps(list(materials_qs), default=str)
+    materials_json = list(materials_qs)
     context = {
         'request_obj': req,
         'req': req,
@@ -443,11 +439,16 @@ def request_close(request, pk):
     return render(request, 'requests_app/request_close.html', context)
 
 
-# ---------- Дашборд ----------
 @login_required
 def request_dashboard(request):
+    from users.models import UserRole
+    
     user = request.user
-    role = user.profile.role if hasattr(user, 'profile') else UserRole.VIEWER
+    role = user.profile.role if hasattr(user, 'profile') else None
+
+    if role not in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]:
+        messages.error(request, 'У вас нет доступа к дашборду.')
+        return redirect('requests_app:request_list')
 
     qs = ServiceRequest.objects.all()
 
@@ -459,6 +460,7 @@ def request_dashboard(request):
         status__in=['new', 'in_progress', 'suspended']
     ).count()
 
+    # Статусы
     status_counts = qs.values('status').annotate(total=Count('id'))
     status_labels = []
     status_data = []
@@ -467,10 +469,21 @@ def request_dashboard(request):
         status_labels.append(status_display.get(item['status'], item['status']))
         status_data.append(item['total'])
 
+    # Топ-5 типов
     type_counts = qs.values('request_type__name').annotate(total=Count('id')).order_by('-total')[:5]
     type_labels = [item['request_type__name'] or 'Без типа' for item in type_counts]
     type_data = [item['total'] for item in type_counts]
 
+    # Приоритеты
+    priority_counts = qs.values('priority').annotate(count=Count('id'))
+    priority_labels = []
+    priority_data = []
+    priority_display = dict(ServiceRequest.PRIORITY_CHOICES)
+    for p in priority_counts:
+        priority_labels.append(priority_display.get(p['priority'], p['priority']))
+        priority_data.append(p['count'])
+
+    # Динамика по месяцам
     today = timezone.now()
     start_date = today - timedelta(days=365)
     requests_in_period = qs.filter(created_at__date__gte=start_date, created_at__date__lte=today)
@@ -482,35 +495,63 @@ def request_dashboard(request):
     month_labels = sorted(monthly_dict.keys())
     month_data = [monthly_dict[m] for m in month_labels]
 
-    # Топ исполнителей (основные + дополнительные)
-    from collections import defaultdict
-    user_counts = defaultdict(int)
-    # Основные назначения
-    for user_id in qs.filter(assigned_to__isnull=False).values_list('assigned_to_id', flat=True):
-        user_counts[user_id] += 1
-    # Дополнительные назначения
-    for user_id in qs.filter(assignees__isnull=False).values_list('assignees__user_id', flat=True):
-        user_counts[user_id] += 1
-
-    top_executors = []
-    for user_id, count in sorted(user_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
-        try:
-            u = User.objects.get(pk=user_id)
-            name = u.get_full_name() or u.username
-            percent = (count / total_requests * 100) if total_requests > 0 else 0
-            top_executors.append({
-                'name': name,
-                'count': count,
-                'percent': percent,
-            })
-        except User.DoesNotExist:
-            continue
-
+    # Среднее время выполнения
     completed_reqs = qs.filter(status__in=['completed', 'closed'], completed_date__isnull=False)
     avg_days = 0
     if completed_reqs.exists():
         total_seconds = sum((req.completed_date - req.created_at).total_seconds() for req in completed_reqs)
         avg_days = total_seconds / len(completed_reqs) / 86400
+
+    # Динамика среднего времени по месяцам
+    monthly_avg = []
+    for month in month_labels:
+        year = int(month[:4])
+        month_num = int(month[5:7])
+        month_reqs = qs.filter(
+            created_at__year=year,
+            created_at__month=month_num,
+            completed_date__isnull=False,
+            status__in=['completed', 'closed']
+        )
+        if month_reqs.exists():
+            total_sec = sum((r.completed_date - r.created_at).total_seconds() for r in month_reqs)
+            avg = total_sec / len(month_reqs) / 86400
+            monthly_avg.append(round(avg, 1))
+        else:
+            monthly_avg.append(0)
+
+    # Все рабочие (роль WORKER)
+    workers = User.objects.filter(profile__role=UserRole.WORKER).select_related('profile')
+    worker_stats = []
+    total_completed_closed = completed_closed
+    for worker in workers:
+        completed_count = ServiceRequest.objects.filter(
+            assigned_to=worker,
+            status__in=['completed', 'closed']
+        ).count()
+        total_assigned = ServiceRequest.objects.filter(assigned_to=worker).count()
+        percent = (completed_count / total_completed_closed * 100) if total_completed_closed > 0 else 0
+        worker_stats.append({
+            'name': worker.get_full_name() or worker.username,
+            'completed': completed_count,
+            'total_assigned': total_assigned,
+            'percent': round(percent, 1)
+        })
+    worker_stats.sort(key=lambda x: x['completed'], reverse=True)
+
+    # Топ-5 исполнителей (по назначенным заявкам)
+    top_executors_raw = (
+        qs.filter(assigned_to__isnull=False)
+        .values('assigned_to__username', 'assigned_to__first_name', 'assigned_to__last_name')
+        .annotate(count=Count('id'))
+        .order_by('-count')[:5]
+    )
+    top_executors = []
+    for te in top_executors_raw:
+        name = f"{te['assigned_to__first_name']} {te['assigned_to__last_name']}".strip()
+        if not name:
+            name = te['assigned_to__username']
+        top_executors.append({'name': name, 'count': te['count']})
 
     context = {
         'total_requests': total_requests,
@@ -521,31 +562,31 @@ def request_dashboard(request):
         'status_data': status_data,
         'type_labels': type_labels,
         'type_data': type_data,
+        'priority_labels': priority_labels,
+        'priority_data': priority_data,
         'month_labels': month_labels,
         'month_data': month_data,
+        'avg_completion_time': round(avg_days, 1),
+        'monthly_avg': monthly_avg,
+        'worker_stats': worker_stats,
         'top_executors': top_executors,
-        'avg_completion_time': avg_days,
     }
     return render(request, 'requests_app/dashboard.html', context)
 
 
-# ---------- Экспорт, отчёты, материалы ----------
 @login_required
 def export_requests_excel(request):
     user = request.user
-    role = user.profile.role if hasattr(user, 'profile') else UserRole.VIEWER
-
+    role = user.profile.role if hasattr(user, 'profile') else None
     qs = ServiceRequest.objects.select_related('building', 'created_by', 'assigned_to')
-    if role == UserRole.CONTRACTOR:
+    if role == UserRole.WORKER:
         qs = qs.filter(Q(assigned_to=user) | Q(assignees__user=user)).distinct()
-    elif role == UserRole.VIEWER:
+    elif role not in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]:
         qs = qs.filter(created_by=user)
-
     status = request.GET.get('status')
     executor = request.GET.get('executor')
     priority = request.GET.get('priority')
     search = request.GET.get('search')
-
     if status:
         qs = qs.filter(status=status)
     if executor:
@@ -557,7 +598,6 @@ def export_requests_excel(request):
             Q(request_number__icontains=search) |
             Q(description__icontains=search)
         )
-
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Заявки"
@@ -566,7 +606,6 @@ def export_requests_excel(request):
         'Создатель', 'Ответственный', 'Плановая дата', 'Дата выполнения', 'Дата создания'
     ]
     ws.append(headers)
-
     for req in qs:
         ws.append([
             req.request_number,
@@ -582,7 +621,6 @@ def export_requests_excel(request):
             req.completed_date.strftime('%d.%m.%Y %H:%M') if req.completed_date else '',
             req.created_at.strftime('%d.%m.%Y %H:%M') if req.created_at else '',
         ])
-
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename="requests_export.xlsx"'
     wb.save(response)
@@ -591,9 +629,18 @@ def export_requests_excel(request):
 
 @login_required
 def custom_report(request):
+    user = request.user
+    role = user.profile.role if hasattr(user, 'profile') else None
+    if role not in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]:
+        messages.error(request, 'У вас нет доступа к отчётам.')
+        return redirect('requests_app:request_list')
     form = ReportForm(request.GET or None)
-    qs = ServiceRequest.objects.all()
-
+    if role == UserRole.WORKER:
+        qs = ServiceRequest.objects.filter(
+            Q(assigned_to=user) | Q(assignees__user=user)
+        ).distinct()
+    else:
+        qs = ServiceRequest.objects.all()
     if request.GET and form.is_valid():
         if form.cleaned_data.get('status'):
             qs = qs.filter(status=form.cleaned_data['status'])
@@ -613,11 +660,9 @@ def custom_report(request):
             qs = qs.filter(created_at__date__gte=form.cleaned_data['date_from'])
         if form.cleaned_data.get('date_to'):
             qs = qs.filter(created_at__date__lte=form.cleaned_data['date_to'])
-
     columns = form.cleaned_data.get('columns') if form.is_valid() else []
     if not columns:
         columns = ['request_number', 'building', 'priority', 'status', 'created_by', 'assigned_to', 'created_at']
-
     field_map = {
         'request_number': '№ заявки',
         'building': 'Здание',
@@ -633,11 +678,94 @@ def custom_report(request):
         'created_at': 'Дата создания',
         'comment': 'Комментарий',
     }
-
+    if request.GET.get('export') == '1':
+        import openpyxl
+        from openpyxl.utils import get_column_letter
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Отчёт по заявкам"
+        for col_idx, col in enumerate(columns, 1):
+            cell = ws.cell(row=1, column=col_idx, value=field_map.get(col, col))
+            cell.font = openpyxl.styles.Font(bold=True)
+        for row_idx, req in enumerate(qs.select_related('building', 'created_by', 'assigned_to', 'request_type'), 2):
+            for col_idx, col in enumerate(columns, 1):
+                value = ''
+                if col == 'request_number':
+                    value = req.request_number
+                elif col == 'building':
+                    value = str(req.building)
+                elif col == 'room_number':
+                    value = req.room_number or ''
+                elif col == 'request_type':
+                    value = req.request_type.name if req.request_type else ''
+                elif col == 'description':
+                    value = req.description[:200] if req.description else ''
+                elif col == 'priority':
+                    value = req.get_priority_display()
+                elif col == 'status':
+                    value = req.get_status_display()
+                elif col == 'created_by':
+                    value = req.created_by.get_full_name() if req.created_by else ''
+                elif col == 'assigned_to':
+                    value = req.assigned_to.get_full_name() if req.assigned_to else ''
+                elif col == 'planned_date':
+                    value = req.planned_date.strftime('%d.%m.%Y') if req.planned_date else ''
+                elif col == 'completed_date':
+                    value = req.completed_date.strftime('%d.%m.%Y %H:%M') if req.completed_date else ''
+                elif col == 'created_at':
+                    value = req.created_at.strftime('%d.%m.%Y %H:%M') if req.created_at else ''
+                elif col == 'comment':
+                    value = req.comment[:200] if req.comment else ''
+                ws.cell(row=row_idx, column=col_idx, value=value)
+        for col_idx in range(1, len(columns) + 1):
+            max_length = 0
+            for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=col_idx, max_col=col_idx):
+                for cell in row:
+                    if cell.value:
+                        max_length = max(max_length, len(str(cell.value)))
+            ws.column_dimensions[get_column_letter(col_idx)].width = min(max_length + 2, 50)
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="custom_report.xlsx"'
+        wb.save(response)
+        return response
+    data = []
+    for req in qs.select_related('building', 'created_by', 'assigned_to', 'request_type'):
+        row = {}
+        for col in columns:
+            if col == 'request_number':
+                row[col] = req.request_number
+            elif col == 'building':
+                row[col] = str(req.building)
+            elif col == 'room_number':
+                row[col] = req.room_number or ''
+            elif col == 'request_type':
+                row[col] = req.request_type.name if req.request_type else ''
+            elif col == 'description':
+                row[col] = req.description[:100] if req.description else ''
+            elif col == 'priority':
+                row[col] = req.get_priority_display()
+            elif col == 'status':
+                row[col] = req.get_status_display()
+            elif col == 'created_by':
+                row[col] = req.created_by.get_full_name() if req.created_by else ''
+            elif col == 'assigned_to':
+                row[col] = req.assigned_to.get_full_name() if req.assigned_to else ''
+            elif col == 'planned_date':
+                row[col] = req.planned_date.strftime('%d.%m.%Y') if req.planned_date else ''
+            elif col == 'completed_date':
+                row[col] = req.completed_date.strftime('%d.%m.%Y %H:%M') if req.completed_date else ''
+            elif col == 'created_at':
+                row[col] = req.created_at.strftime('%d.%m.%Y %H:%M') if req.created_at else ''
+            elif col == 'comment':
+                row[col] = req.comment[:200] if req.comment else ''
+            else:
+                row[col] = ''
+        data.append(row)
     context = {
         'form': form,
-        'requests': qs,
+        'data': data,
         'columns': columns,
+        'column_labels': field_map,
         'field_map': field_map,
     }
     return render(request, 'requests_app/custom_report.html', context)
@@ -658,7 +786,6 @@ def import_materials(request):
                 unit = row[1] if len(row) > 1 else None
                 default_price = row[2] if len(row) > 2 and row[2] is not None else 0
                 quantity_in_stock = row[3] if len(row) > 3 and row[3] is not None else 0
-
                 if name and unit:
                     try:
                         default_price = float(str(default_price).replace(',', '.'))
@@ -668,7 +795,6 @@ def import_materials(request):
                         quantity_in_stock = float(str(quantity_in_stock).replace(',', '.'))
                     except (ValueError, TypeError):
                         quantity_in_stock = 0.0
-
                     material, is_created = Material.objects.update_or_create(
                         name=name,
                         defaults={
@@ -681,14 +807,12 @@ def import_materials(request):
                         created += 1
                     else:
                         updated += 1
-
             messages.success(request, f'Импортировано: добавлено {created}, обновлено {updated}.')
             return redirect('requests_app:material_stock')
         else:
             messages.error(request, 'Ошибка в форме. Проверьте файл.')
     else:
         form = ImportMaterialsForm()
-
     return render(request, 'requests_app/import_materials.html', {'form': form})
 
 
@@ -697,12 +821,10 @@ def download_materials_template(request):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Материалы"
-
     headers = ['name', 'unit', 'default_price', 'quantity_in_stock']
     ws.append(headers)
     ws.append(['Краска', 'л', 350.00, 100])
     ws.append(['Лампа светодиодная', 'шт', 450.00, 50])
-
     for col in ws.columns:
         max_len = 0
         col_letter = col[0].column_letter
@@ -713,7 +835,6 @@ def download_materials_template(request):
             except:
                 pass
         ws.column_dimensions[col_letter].width = min(max_len + 2, 30)
-
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename="materials_import_template.xlsx"'
     wb.save(response)
@@ -724,14 +845,11 @@ def download_materials_template(request):
 def material_stock(request):
     search_query = request.GET.get('search', '').strip()
     materials_qs = Material.objects.all().order_by('name')
-
     if search_query:
         materials_qs = materials_qs.filter(name__icontains=search_query)
-
     paginator = Paginator(materials_qs, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-
     return render(request, 'requests_app/material_stock.html', {
         'materials': page_obj,
         'search': search_query,
@@ -741,14 +859,11 @@ def material_stock(request):
 @login_required
 def material_stock_export(request):
     materials = Material.objects.all().values('name', 'unit', 'quantity_in_stock', 'default_price')
-
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Склад материалов"
-
     headers = ['Наименование', 'Единица измерения', 'Количество на складе', 'Цена за единицу']
     ws.append(headers)
-
     for m in materials:
         ws.append([
             m['name'],
@@ -756,7 +871,6 @@ def material_stock_export(request):
             float(m['quantity_in_stock']),
             float(m['default_price'])
         ])
-
     for col in ws.columns:
         max_length = 0
         col_letter = col[0].column_letter
@@ -768,7 +882,6 @@ def material_stock_export(request):
                 pass
         adjusted_width = min(max_length + 2, 30)
         ws.column_dimensions[col_letter].width = adjusted_width
-
     response = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
@@ -780,10 +893,9 @@ def material_stock_export(request):
 @login_required
 def material_add(request):
     role = request.user.profile.role if hasattr(request.user, 'profile') else None
-    if role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]:
+    if role not in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]:
         messages.error(request, 'Нет прав для добавления материалов.')
         return redirect('requests_app:material_stock')
-    
     if request.method == 'POST':
         form = MaterialForm(request.POST)
         if form.is_valid():
@@ -800,10 +912,9 @@ def material_edit(request, pk):
     material = get_object_or_404(Material, pk=pk)
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else None
-    if role not in (UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER):
+    if role not in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]:
         messages.error(request, 'Нет прав для редактирования материала.')
         return redirect('requests_app:material_stock')
-
     if request.method == 'POST':
         form = MaterialForm(request.POST, instance=material)
         if form.is_valid():
@@ -822,16 +933,14 @@ def material_delete(request, pk):
     material = get_object_or_404(Material, pk=pk)
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else None
-    if role not in (UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER):
+    if role not in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]:
         messages.error(request, 'Нет прав для удаления материала.')
         return redirect('requests_app:material_stock')
-    
     if request.method == 'POST':
         name = material.name
         material.delete()
         messages.success(request, f'Материал "{name}" удалён.')
         return redirect('requests_app:material_stock')
-    
     return render(request, 'requests_app/material_confirm_delete.html', {'material': material})
 
 
@@ -840,7 +949,7 @@ def material_delete_ajax(request, pk):
     material = get_object_or_404(Material, pk=pk)
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else None
-    if role not in (UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER):
+    if role not in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]:
         return JsonResponse({'success': False, 'error': 'Нет прав'}, status=403)
     if request.method == 'POST':
         material.delete()
@@ -848,17 +957,14 @@ def material_delete_ajax(request, pk):
     return JsonResponse({'success': False, 'error': 'Метод не разрешён'}, status=405)
 
 
-# ---------- Добавление/удаление множественных исполнителей ----------
 @login_required
 def request_add_assignee(request, pk):
     req = get_object_or_404(ServiceRequest, pk=pk)
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else None
-
-    if role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]:
+    if role not in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]:
         messages.error(request, 'Нет прав для назначения исполнителей.')
         return redirect('requests_app:request_detail', pk=pk)
-
     if request.method == 'POST':
         user_id = request.POST.get('user_id')
         if user_id:
@@ -879,7 +985,6 @@ def request_add_assignee(request, pk):
         else:
             messages.error(request, 'Выберите пользователя.')
         return redirect('requests_app:request_detail', pk=pk)
-
     assigned_user_ids = req.assignees.values_list('user_id', flat=True)
     available_users = User.objects.filter(is_active=True).exclude(id__in=assigned_user_ids).exclude(id=req.assigned_to_id).order_by('username')
     return render(request, 'requests_app/add_assignee.html', {'request_obj': req, 'users': available_users})
@@ -890,11 +995,9 @@ def request_remove_assignee(request, pk, user_id):
     req = get_object_or_404(ServiceRequest, pk=pk)
     user = request.user
     role = user.profile.role if hasattr(user, 'profile') else None
-
-    if role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]:
+    if role not in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]:
         messages.error(request, 'Нет прав для удаления исполнителей.')
         return redirect('requests_app:request_detail', pk=pk)
-
     assignee = get_object_or_404(RequestAssignee, request=req, user_id=user_id)
     assignee_name = assignee.user.get_full_name() or assignee.user.username
     assignee.delete()
@@ -905,3 +1008,137 @@ def request_remove_assignee(request, pk, user_id):
     )
     messages.success(request, f'Исполнитель {assignee_name} удалён.')
     return redirect('requests_app:request_detail', pk=pk)
+
+
+# ---------- Публичная форма для неавторизованных пользователей ----------
+@csrf_protect
+@never_cache
+@rate_limit()
+def public_request_create(request):
+    lang = request.GET.get('lang', 'ru')
+    if lang not in ['ru', 'en']:
+        lang = 'ru'
+
+    if request.method == 'POST':
+        form = PublicRequestForm(request.POST, request.FILES, lang=lang)
+        if form.is_valid():
+            # Валидация файлов
+            files = request.FILES.getlist('files')
+            max_files = 5
+            max_size = 5 * 1024 * 1024
+            allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf']
+            allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.pdf']
+
+            if len(files) > max_files:
+                messages.error(request, f'Можно прикрепить не более {max_files} файлов.')
+                post_data = request.POST.copy()
+                post_data.update(generate_new_captcha(lang))
+                form = PublicRequestForm(post_data, request.FILES, lang=lang)
+                context = {'form': form, 'lang': lang, 'hide_navbar': True}
+                return render(request, f'requests_app/public_request_form_{lang}.html', context)
+
+            for f in files:
+                if f.size > max_size:
+                    messages.error(request, f'Файл "{f.name}" превышает 5 МБ.')
+                    post_data = request.POST.copy()
+                    post_data.update(generate_new_captcha(lang))
+                    form = PublicRequestForm(post_data, request.FILES, lang=lang)
+                    context = {'form': form, 'lang': lang, 'hide_navbar': True}
+                    return render(request, f'requests_app/public_request_form_{lang}.html', context)
+
+                ext = os.path.splitext(f.name)[1].lower()
+                if ext not in allowed_extensions:
+                    messages.error(request, f'Файл "{f.name}" имеет недопустимое расширение. Разрешены: {", ".join(allowed_extensions)}')
+                    post_data = request.POST.copy()
+                    post_data.update(generate_new_captcha(lang))
+                    form = PublicRequestForm(post_data, request.FILES, lang=lang)
+                    context = {'form': form, 'lang': lang, 'hide_navbar': True}
+                    return render(request, f'requests_app/public_request_form_{lang}.html', context)
+
+                try:
+                    import magic
+                    f.seek(0)
+                    mime = magic.from_buffer(f.read(1024), mime=True)
+                    f.seek(0)
+                    if mime not in allowed_types:
+                        messages.error(request, f'Файл "{f.name}" имеет недопустимый тип ({mime}).')
+                        post_data = request.POST.copy()
+                        post_data.update(generate_new_captcha(lang))
+                        form = PublicRequestForm(post_data, request.FILES, lang=lang)
+                        context = {'form': form, 'lang': lang, 'hide_navbar': True}
+                        return render(request, f'requests_app/public_request_form_{lang}.html', context)
+                except ImportError:
+                    pass
+
+            sr = form.save(commit=False)
+            sr.created_by = None
+            sr.assigned_to = None
+            sr.status = 'new'
+            sr.priority = 'low'
+            sr.ip_address = request.META.get('REMOTE_ADDR')
+            sr.description = translate_to_russian(sr.description)
+
+            contact_info = f"Контактное лицо: {sr.contact_name or 'не указано'}, Телефон: {sr.contact_phone or 'не указан'}"
+            if sr.comment:
+                sr.comment = f"{sr.comment}\n{contact_info}"
+            else:
+                sr.comment = contact_info
+
+            sr.save()
+
+            for f in files:
+                RequestFile.objects.create(
+                    request=sr,
+                    file=f,
+                    uploaded_by=None,
+                    description='Загружено из публичной формы'
+                )
+
+            if settings.DEFAULT_FROM_EMAIL and hasattr(settings, 'ADMINS') and settings.ADMINS:
+                try:
+                    subject = f"New public request #{sr.request_number}"
+                    html_message = render_to_string('requests_app/email_new_public_request.html', {'request': sr})
+                    send_mail(
+                        subject,
+                        f"Request #{sr.request_number} from {sr.contact_name or 'Anonymous'}",
+                        settings.DEFAULT_FROM_EMAIL,
+                        [email for name, email in settings.ADMINS],
+                        fail_silently=True,
+                        html_message=html_message
+                    )
+                except Exception:
+                    pass
+
+            # Определяем, подана ли заявка в нерабочее время
+            now = timezone.localtime(timezone.now())
+            off_hours = False
+            if now.weekday() >= 5:  # суббота (5) или воскресенье (6)
+                off_hours = True
+            else:
+                work_start = time(9, 30)
+                work_end = time(18, 0)
+                current_time = now.time()
+                if current_time < work_start or current_time >= work_end:
+                    off_hours = True
+
+            off_param = '&off_hours=1' if off_hours else ''
+            return redirect(f'{reverse("requests_app:public_request_success")}?lang={lang}{off_param}')
+        else:
+            # Форма не валидна – перегенерируем капчу
+            post_data = request.POST.copy()
+            post_data.update(generate_new_captcha(lang))
+            form = PublicRequestForm(post_data, request.FILES, lang=lang)
+            context = {'form': form, 'lang': lang, 'hide_navbar': True}
+            return render(request, f'requests_app/public_request_form_{lang}.html', context)
+    else:
+        form = PublicRequestForm(lang=lang)
+        context = {'form': form, 'lang': lang, 'hide_navbar': True}
+        return render(request, f'requests_app/public_request_form_{lang}.html', context)
+
+
+def public_request_success(request):
+    lang = request.GET.get('lang', 'ru')
+    if lang not in ['ru', 'en']:
+        lang = 'ru'
+    off_hours = request.GET.get('off_hours') == '1'
+    return render(request, f'requests_app/public_request_success_{lang}.html', {'hide_navbar': True, 'off_hours': off_hours})

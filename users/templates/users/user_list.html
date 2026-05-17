@@ -87,36 +87,39 @@
                             <td>
                                 <span class="badge 
                                     {% if u.profile.role == 'ADMIN' %}bg-danger
-                                    {% elif u.profile.role == 'MANAGER' %}bg-primary
-                                    {% elif u.profile.role == 'VIEWER' %}bg-secondary
-                                    {% elif u.profile.role == 'CONTRACTOR' %}bg-success
-                                    {% else %}bg-light text-dark{% endif %}"
+                                    {% elif u.profile.role == 'CONTRACT_SPECIALIST' %}bg-primary
+                                    {% elif u.profile.role == 'ENGINEER' %}bg-info
+                                    {% elif u.profile.role == 'DISPATCHER' %}bg-warning
+                                    {% elif u.profile.role == 'WORKER' %}bg-success
+                                    {% else %}bg-secondary{% endif %}"
                                     style="cursor: help;"
                                     data-bs-toggle="tooltip"
                                     data-bs-html="true"
                                     title="
                                         {% if u.profile.role == 'ADMIN' %}
-                                            <strong>Администратор</strong><br>Полный доступ ко всем функциям системы.
-                                        {% elif u.profile.role == 'MANAGER' %}
-                                            <strong>Менеджер</strong><br>Управление договорами, отчётами, заявками.
-                                        {% elif u.profile.role == 'VIEWER' %}
-                                            <strong>Наблюдатель</strong><br>Только просмотр договоров и отчётов.
-                                        {% elif u.profile.role == 'CONTRACTOR' %}
-                                            <strong>Исполнитель</strong><br>Доступ только к своим договорам.
+                                            <strong>Администратор</strong><br>Полный доступ ко всем функциям.
+                                        {% elif u.profile.role == 'CONTRACT_SPECIALIST' %}
+                                            <strong>Специалист по договорам</strong><br>Управление договорами и счётчиками.
+                                        {% elif u.profile.role == 'ENGINEER' %}
+                                            <strong>Инженер</strong><br>Просмотр договоров, полный доступ к заявкам, редактирование счётчиков.
+                                        {% elif u.profile.role == 'DISPATCHER' %}
+                                            <strong>Диспетчер</strong><br>Полный доступ к заявкам.
+                                        {% elif u.profile.role == 'WORKER' %}
+                                            <strong>Рабочий</strong><br>Доступ только к назначенным заявкам.
                                         {% else %}
                                             Неизвестная роль
                                         {% endif %}
                                     ">
                                     {{ u.profile.get_role_display }}
                                 </span>
-                             </td>
+                              </td>
                             <td>
-                                {% if u.profile.is_active %}
+                                {% if u.is_active %}
                                     <span class="badge bg-success">Активен</span>
                                 {% else %}
                                     <span class="badge bg-secondary">Заблокирован</span>
                                 {% endif %}
-                             </td>
+                              </td>
                             <td>{{ u.profile.position|default:"—" }}</td>
                             <td>
                                 {% for g in u.groups.all %}
@@ -139,7 +142,7 @@
                                     </span>
                                 {% empty %}—
                                 {% endfor %}
-                             </td>
+                              </td>
                             <td>
                                 <div class="btn-group btn-group-sm">
                                     <a href="{% url 'users:user_edit' u.id %}" class="btn btn-outline-primary" title="Редактировать"><i class="bi bi-pencil"></i></a>
@@ -147,8 +150,8 @@
                                     <a href="{% url 'users:user_toggle_active' u.id %}" class="btn btn-outline-secondary" title="Активировать/Деактивировать"><i class="bi bi-power"></i></a>
                                     <a href="{% url 'users:user_delete' u.id %}" class="btn btn-outline-danger" title="Удалить"><i class="bi bi-trash"></i></a>
                                 </div>
-                             </td>
-                         </tr>
+                              </td>
+                          </tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -191,7 +194,6 @@
 <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
 <script>
     $(document).ready(function() {
-        // DataTable
         $('#usersTable').DataTable({
             language: { url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/ru.json' },
             order: [[1, 'asc']],
@@ -201,12 +203,10 @@
             ]
         });
 
-        // Select all
         $('#selectAll').on('change', function() {
             $('.user-checkbox').prop('checked', this.checked);
         });
 
-        // Show/hide role select for bulk action
         $('#bulkActionSelect').on('change', function() {
             if ($(this).val() === 'change_role') {
                 $('#role_select_wrapper').show();
@@ -215,7 +215,6 @@
             }
         });
 
-        // Bulk action submit
         $('#bulkActionForm').on('submit', function(e) {
             let selected = [];
             $('.user-checkbox:checked').each(function() {
