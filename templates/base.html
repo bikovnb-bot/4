@@ -96,29 +96,33 @@
                         </ul>
                     </li>
                     <!-- Приборы учёта (выпадающее меню) -->
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'energy' %}active{% endif %}" href="#" id="energyDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-battery-charging"></i> Приборы учёта
-                        </a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{% url 'energy:meter_list' %}">
-                                <i class="bi bi-grid-3x3-gap-fill"></i> Список приборов
-                            </a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{% url 'energy:consumption_report' %}">
-                                <i class="bi bi-graph-up"></i> Отчёт по потреблению
-                            </a></li>
-                            <li><a class="dropdown-item" href="{% url 'energy:anomaly_report' %}">
-                                <i class="bi bi-exclamation-triangle"></i> Аномалии потребления
-                            </a></li>
-                            <li><a class="dropdown-item" href="{% url 'energy:import_readings' %}">
-                                <i class="bi bi-upload"></i> Импорт показаний
-                            </a></li>
-                            <li><a class="dropdown-item" href="{% url 'energy:export_readings' %}">
-                                <i class="bi bi-download"></i> Экспорт истории
-                            </a></li>
-                        </ul>
-                    </li>
+<li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'energy' %}active{% endif %}" href="#" id="energyDropdown" role="button" data-bs-toggle="dropdown">
+        <i class="bi bi-battery-charging"></i> Приборы учёта
+    </a>
+    <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="{% url 'energy:energy_dashboard' %}"
+            <i class="bi bi-speedometer2"></i> Дашборд
+        </a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="{% url 'energy:meter_list' %}">
+            <i class="bi bi-grid-3x3-gap-fill"></i> Список приборов
+        </a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="{% url 'energy:consumption_report' %}">
+            <i class="bi bi-graph-up"></i> Отчёт по потреблению
+        </a></li>
+        <li><a class="dropdown-item" href="{% url 'energy:anomaly_report' %}">
+            <i class="bi bi-exclamation-triangle"></i> Аномалии потребления
+        </a></li>
+        <li><a class="dropdown-item" href="{% url 'energy:import_readings' %}">
+            <i class="bi bi-upload"></i> Импорт показаний
+        </a></li>
+        <li><a class="dropdown-item" href="{% url 'energy:export_readings' %}">
+            <i class="bi bi-download"></i> Экспорт истории
+        </a></li>
+    </ul>
+</li>
                     <!-- Заявки (выпадающее меню) -->
 <li class="nav-item dropdown">
     <a class="nav-link dropdown-toggle {% if request.resolver_match.app_name == 'requests_app' %}active{% endif %}" href="#" id="requestsDropdown" role="button" data-bs-toggle="dropdown">

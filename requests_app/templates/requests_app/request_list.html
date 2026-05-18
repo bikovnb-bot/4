@@ -16,8 +16,8 @@
             </a>
             {% if user_role in 'ADMIN,ENGINEER,DISPATCHER' %}
                 <a href="{% url 'requests_app:dashboard' %}" class="btn btn-info ms-2">
-                    <i class="bi bi-graph-up"></i> Дашборд
-                </a>
+             <i class="bi bi-graph-up"></i> Дашборд
+            </a>
                 <a href="{% url 'requests_app:custom_report' %}" class="btn btn-outline-info ms-2">
                     <i class="bi bi-file-earmark-text"></i> Отчёты
                 </a>
