@@ -5,6 +5,7 @@ from decimal import Decimal
 from datetime import datetime, timedelta, time
 import openpyxl
 
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
@@ -21,7 +22,7 @@ from django.template.loader import render_to_string
 from django.conf import settings
 from django.urls import reverse
 from openpyxl.utils import get_column_letter
-
+from .utils import send_telegram_notification
 from .models import ServiceRequest, UsedMaterial, Material, RequestType, RequestHistory, RequestFile, RequestAssignee
 from .forms import (
     ServiceRequestForm, UsedMaterialFormSet, ReportForm,
@@ -1085,6 +1086,20 @@ def public_request_create(request):
                 sr.comment = contact_info
 
             sr.save()
+# ===== ОТПРАВКА УВЕДОМЛЕНИЯ В TELEGRAM =====
+            msg = (
+                f"🔔 <b>Новая публичная заявка!</b>\n"
+                f"<b>Номер:</b> {sr.request_number}\n"
+                f"<b>Здание:</b> {sr.building}\n"
+                f"<b>Помещение:</b> {sr.room_number or '—'}\n"
+                f"<b>Тип:</b> {sr.request_type.name}\n"
+                f"<b>Описание:</b> {sr.description[:100]}\n"
+            )
+            if sr.contact_name or sr.contact_phone:
+                msg += f"<b>Контакты:</b> {sr.contact_name or ''} {sr.contact_phone or ''}\n"
+            msg += f"<a href='https://exploitationapp.ru/requests/{sr.id}/'>Перейти к заявке</a>"
+            send_telegram_notification(msg)
+            # ==========================================
 
             for f in files:
                 RequestFile.objects.create(

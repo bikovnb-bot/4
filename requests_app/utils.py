@@ -1,4 +1,5 @@
 # requests_app/utils.py
+import requests
 
 from django.core.cache import cache
 from django.http import HttpResponseForbidden
@@ -73,3 +74,21 @@ def rate_limit(limit=None, window=None):
             return view_func(request, *args, **kwargs)
         return wrapped
     return decorator
+
+def send_telegram_notification(message):
+    """Отправляет сообщение в Telegram."""
+    token = settings.TELEGRAM_BOT_TOKEN
+    chat_id = settings.TELEGRAM_CHAT_ID
+    if not token or not chat_id:
+        return
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    try:
+        response = requests.post(url, json={
+            'chat_id': chat_id,
+            'text': message,
+            'parse_mode': 'HTML'
+        }, timeout=5)
+        response.raise_for_status()
+    except Exception as e:
+        # Не прерываем выполнение, но можно залогировать
+        print(f"Telegram error: {e}")
