@@ -7,7 +7,6 @@
 
 {% block extra_css %}
 <style>
-    /* Общие стили */
     #reader {
         width: 100%;
         max-width: 500px;
@@ -29,8 +28,6 @@
     .already-scanned {
         background-color: #fff3cd !important;
     }
-
-    /* Адаптация для мобильных */
     @media (max-width: 768px) {
         h2 { font-size: 1.4rem; }
         .card-body { padding: 0.75rem; }
@@ -65,8 +62,6 @@
         .table-sm td, .table-sm th { font-size: 0.75rem; padding: 0.2rem 0.3rem; }
         .card-header h5 { font-size: 0.9rem; }
     }
-
-    /* Офлайн-баннер */
     .offline-indicator {
         border-radius: 0;
         margin-bottom: 0;
@@ -75,10 +70,9 @@
         margin-left: auto;
     }
     #cameraControls {
-        display: none; /* скрываем кнопки, т.к. камера запускается автоматически */
+        display: none;
     }
     #reader-container {
-        display: block;
         margin-top: 1rem;
     }
     #offlineBanner {
@@ -91,7 +85,6 @@
 
 {% block content %}
 <div class="container mt-4">
-    <!-- Баннер офлайн-записей -->
     <div id="offlineBanner" class="alert alert-warning d-flex align-items-center justify-content-between" role="alert">
         <div>
             <i class="bi bi-cloud-arrow-down-fill me-2"></i>
@@ -109,15 +102,17 @@
     <p class="text-muted">Наведите камеру на QR-код имущества или введите номер вручную.</p>
 
     <div class="row">
-        <!-- Левая колонка: сканер -->
         <div class="col-md-6">
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <!-- Контейнер для сканера (автозапуск) -->
                     <div id="reader-container">
                         <div id="reader"></div>
                     </div>
-                    <!-- Ручной ввод -->
+                    <div class="mt-2">
+                        <button id="stopCameraBtn" class="btn btn-danger btn-sm">
+                            <i class="bi bi-camera-off"></i> Остановить камеру
+                        </button>
+                    </div>
                     <div class="mt-3">
                         <div class="input-group">
                             <input type="text" id="manualInput" class="form-control" placeholder="Введите инв. номер">
@@ -131,7 +126,6 @@
             </div>
         </div>
 
-        <!-- Правая колонка: список отсканированных -->
         <div class="col-md-6">
             <div class="card shadow-sm">
                 <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap">
@@ -201,17 +195,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const tableBody = document.getElementById('scanTableBody');
     const noScansRow = document.getElementById('noScansRow');
     const scanCount = document.getElementById('scanCount');
+    const stopCameraBtn = document.getElementById('stopCameraBtn');
     const syncBtn = document.getElementById('syncBtn');
     const offlineBadge = document.getElementById('offlineBadge');
     const offlineBanner = document.getElementById('offlineBanner');
     const offlineBannerText = document.getElementById('offlineBannerText');
     const syncFromBannerBtn = document.getElementById('syncFromBannerBtn');
 
-    // ---------- ОФЛАЙН-ИНВЕНТАРИЗАЦИЯ ----------
     const OFFLINE_KEY = 'offline_scans';
     const ASSETS_KEY = 'cached_assets';
 
-    // Загрузка списка активов при первом запуске (только онлайн)
     function loadAssetsCache() {
         if (navigator.onLine) {
             fetch('/assets/api/assets/')
@@ -224,16 +217,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Получить кэшированные активы
     function getCachedAssets() {
         const raw = localStorage.getItem(ASSETS_KEY);
         if (!raw) return [];
         try { return JSON.parse(raw); } catch { return []; }
     }
 
-    // Сохранить отметку офлайн
     function saveOfflineScan(inventoryNumber) {
         let scans = JSON.parse(localStorage.getItem(OFFLINE_KEY) || '[]');
+        const alreadyExists = scans.some(s => s.inventory_number === inventoryNumber && !s.synced);
+        if (alreadyExists) {
+            showStatus(`⚠️ Объект с номером ${inventoryNumber} уже отмечен офлайн`, 'warning');
+            return false;
+        }
         const now = new Date().toISOString();
         scans.push({
             inventory_number: inventoryNumber,
@@ -242,22 +238,20 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         localStorage.setItem(OFFLINE_KEY, JSON.stringify(scans));
         updateOfflineBadge();
+        return true;
     }
 
-    // Отправить все несинхронизированные отметки на сервер
     function syncOfflineScans() {
         if (!navigator.onLine) {
             console.warn('Нет подключения к интернету. Синхронизация невозможна.');
             return Promise.reject('offline');
         }
-
         const scans = JSON.parse(localStorage.getItem(OFFLINE_KEY) || '[]');
         const unsynced = scans.filter(s => !s.synced);
         if (unsynced.length === 0) {
             console.log('Нет данных для синхронизации.');
             return Promise.resolve();
         }
-
         const invNumbers = unsynced.map(s => s.inventory_number);
         return fetch('/assets/api/inventory/sync/', {
             method: 'POST',
@@ -270,7 +264,6 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Помечаем все как синхронизированные
                 const updated = scans.map(s => {
                     if (!s.synced) s.synced = true;
                     return s;
@@ -296,7 +289,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Обновить индикаторы (бейдж и баннер)
     function updateOfflineBadge() {
         const scans = JSON.parse(localStorage.getItem(OFFLINE_KEY) || '[]');
         const unsynced = scans.filter(s => !s.synced);
@@ -314,7 +306,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // ---------- АВТОМАТИЧЕСКАЯ СИНХРОНИЗАЦИЯ ----------
     window.addEventListener('online', () => {
         document.querySelector('.offline-indicator')?.remove();
         syncOfflineScans();
@@ -346,7 +337,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Инициализация офлайн-функций
     if (!localStorage.getItem(ASSETS_KEY)) {
         loadAssetsCache();
     }
@@ -355,7 +345,6 @@ document.addEventListener('DOMContentLoaded', function() {
     updateOfflineBadge();
     autoSyncOnLoad();
 
-    // ---------- ОСНОВНАЯ ЛОГИКА ----------
     let html5QrCode = null;
     let isCameraRunning = false;
 
@@ -420,57 +409,55 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (data.error === 'Имущество не найдено') {
                         const cached = getCachedAssets().find(a => a.inventory_number === trimmed);
                         if (cached) {
-                            saveOfflineScan(trimmed);
-                            showStatus(`📴 ${cached.name} (${trimmed}) сохранён офлайн`, 'warning');
+                            const saved = saveOfflineScan(trimmed);
+                            if (saved) {
+                                showStatus(`📴 ${cached.name} (${trimmed}) сохранён офлайн`, 'warning');
+                                addOfflineRow(trimmed, cached.name);
+                            }
                             manualInput.value = '';
-                            addOfflineRow(trimmed, cached.name);
                         } else {
                             showStatus(`❌ Имущество с номером ${trimmed} не найдено ни на сервере, ни в кэше.`, 'danger');
                         }
                     } else if (data.asset && data.asset.already_scanned) {
                         showStatus(`⚠️ ${data.asset.name} уже был отмечен сегодня`, 'warning');
                     } else {
-                        saveOfflineScan(trimmed);
-                        showStatus(`📴 Сохранено офлайн (${trimmed})`, 'warning');
+                        const saved = saveOfflineScan(trimmed);
+                        if (saved) {
+                            showStatus(`📴 Сохранено офлайн (${trimmed})`, 'warning');
+                            const cached = getCachedAssets().find(a => a.inventory_number === trimmed);
+                            if (cached) addOfflineRow(trimmed, cached.name);
+                        }
                         manualInput.value = '';
                     }
                 }
             })
             .catch(err => {
-                saveOfflineScan(trimmed);
+                const saved = saveOfflineScan(trimmed);
+                if (saved) {
+                    const cached = getCachedAssets().find(a => a.inventory_number === trimmed);
+                    const name = cached ? cached.name : trimmed;
+                    showStatus(`📴 ${name} сохранён офлайн`, 'warning');
+                    if (cached) addOfflineRow(trimmed, name);
+                }
+                manualInput.value = '';
+            });
+        } else {
+            const saved = saveOfflineScan(trimmed);
+            if (saved) {
                 const cached = getCachedAssets().find(a => a.inventory_number === trimmed);
                 const name = cached ? cached.name : trimmed;
                 showStatus(`📴 ${name} сохранён офлайн`, 'warning');
-                manualInput.value = '';
-                addOfflineRow(trimmed, name);
-            });
-        } else {
-            saveOfflineScan(trimmed);
-            const cached = getCachedAssets().find(a => a.inventory_number === trimmed);
-            const name = cached ? cached.name : trimmed;
-            showStatus(`📴 ${name} сохранён офлайн`, 'warning');
+                if (cached) addOfflineRow(trimmed, name);
+            }
             manualInput.value = '';
-            addOfflineRow(trimmed, name);
         }
     }
 
-    // ---------- АВТОЗАПУСК КАМЕРЫ ----------
-    function initCamera() {
-        if (html5QrCode) {
-            // Если уже создан, просто запускаем
-            html5QrCode.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
-                onScanSuccess,
-                onScanError
-            ).then(() => {
-                isCameraRunning = true;
-            }).catch(err => {
-                console.error('Ошибка запуска камеры:', err);
-                showStatus('⚠️ Не удалось получить доступ к камере. Используйте ручной ввод.', 'warning');
-            });
-            return;
-        }
+    function startCamera() {
+        if (html5QrCode && isCameraRunning) return;
+
+        const readerElement = document.getElementById('reader');
+        if (!readerElement) return;
 
         html5QrCode = new Html5Qrcode("reader");
         html5QrCode.start(
@@ -480,10 +467,28 @@ document.addEventListener('DOMContentLoaded', function() {
             onScanError
         ).then(() => {
             isCameraRunning = true;
+            stopCameraBtn.style.display = 'inline-block';
+            console.log('Камера запущена');
         }).catch(err => {
             console.error('Ошибка запуска камеры:', err);
             showStatus('⚠️ Не удалось получить доступ к камере. Используйте ручной ввод.', 'warning');
+            stopCameraBtn.style.display = 'none';
         });
+    }
+
+    function stopCamera() {
+        if (html5QrCode && isCameraRunning) {
+            html5QrCode.stop().then(() => {
+                isCameraRunning = false;
+                stopCameraBtn.style.display = 'none';
+                console.log('Камера остановлена');
+            }).catch(err => {
+                console.error('Ошибка остановки камеры:', err);
+            });
+        } else {
+            isCameraRunning = false;
+            stopCameraBtn.style.display = 'none';
+        }
     }
 
     function onScanSuccess(decodedText) {
@@ -495,7 +500,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Игнорируем
     }
 
-    // Ручной ввод
+    stopCameraBtn.addEventListener('click', stopCamera);
+
     manualBtn.addEventListener('click', function() {
         processScan(manualInput.value);
     });
@@ -510,7 +516,6 @@ document.addEventListener('DOMContentLoaded', function() {
         manualInput.focus();
     }
 
-    // Показываем офлайн-записи при загрузке
     const offlineScans = JSON.parse(localStorage.getItem(OFFLINE_KEY) || '[]');
     const unsyncedOffline = offlineScans.filter(s => !s.synced);
     if (unsyncedOffline.length > 0) {
@@ -522,8 +527,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // АВТОЗАПУСК камеры при загрузке страницы
-    initCamera();
+    // Автоматический запуск камеры
+    startCamera();
 });
 </script>
 {% endblock %}
