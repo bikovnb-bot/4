@@ -21,7 +21,10 @@ urlpatterns = [
     path('<int:pk>/qr/', views.generate_asset_qr, name='generate_qr'),
     path('<int:pk>/qr/download/', views.download_asset_qr, name='download_qr'),
 
-    # Инвентаризация
+    # Инвентаризация (отметка конкретного объекта)
+    path('<int:pk>/inventory/', views.inventory_asset, name='inventory_asset'),  # <-- ДОБАВЛЕНО
+
+    # Инвентаризация (общие страницы)
     path('inventory/', views.inventory_scan, name='inventory_scan'),
     path('inventory/scan-ajax/', views.inventory_scan_ajax, name='inventory_scan_ajax'),
     path('inventory/history/', views.inventory_history, name='inventory_history'),

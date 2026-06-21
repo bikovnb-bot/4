@@ -125,11 +125,14 @@ class Asset(models.Model):
 
     def generate_qr_code(self):
         """
-        Генерирует QR-код, содержащий ссылку на страницу инвентаризации.
+        Генерирует QR-код, содержащий инвентарный номер объекта.
+        При сканировании на странице инвентаризации этот номер используется
+        для поиска имущества и отметки его в проверке.
         """
-        if not self.pk:
+        if not self.pk or not self.inventory_number:
             return
-        url = f"{settings.SITE_URL}{reverse('assets:inventory_asset', args=[self.pk])}"
+        # Кодируем только инвентарный номер (без URL)
+        data = self.inventory_number
         try:
             qr = qrcode.QRCode(
                 version=1,
@@ -137,7 +140,7 @@ class Asset(models.Model):
                 box_size=10,
                 border=4,
             )
-            qr.add_data(url)
+            qr.add_data(data)
             qr.make(fit=True)
             img = qr.make_image(fill_color="black", back_color="white")
             buffer = BytesIO()
