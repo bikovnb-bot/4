@@ -70,7 +70,10 @@
         margin-left: auto;
     }
     #cameraControls {
-        display: none;
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-top: 0.5rem;
     }
     #reader-container {
         margin-top: 1rem;
@@ -105,13 +108,16 @@
         <div class="col-md-6">
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <div id="reader-container">
-                        <div id="reader"></div>
-                    </div>
-                    <div class="mt-2">
-                        <button id="stopCameraBtn" class="btn btn-danger btn-sm">
+                    <div id="cameraControls">
+                        <button id="startCameraBtn" class="btn btn-success">
+                            <i class="bi bi-camera"></i> Запустить камеру
+                        </button>
+                        <button id="stopCameraBtn" class="btn btn-danger" style="display:none;">
                             <i class="bi bi-camera-off"></i> Остановить камеру
                         </button>
+                    </div>
+                    <div id="reader-container">
+                        <div id="reader"></div>
                     </div>
                     <div class="mt-3">
                         <div class="input-group">
@@ -195,6 +201,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const tableBody = document.getElementById('scanTableBody');
     const noScansRow = document.getElementById('noScansRow');
     const scanCount = document.getElementById('scanCount');
+    const startCameraBtn = document.getElementById('startCameraBtn');
     const stopCameraBtn = document.getElementById('stopCameraBtn');
     const syncBtn = document.getElementById('syncBtn');
     const offlineBadge = document.getElementById('offlineBadge');
@@ -345,6 +352,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateOfflineBadge();
     autoSyncOnLoad();
 
+    // ---------- КАМЕРА ----------
     let html5QrCode = null;
     let isCameraRunning = false;
 
@@ -453,12 +461,53 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Функция полной очистки и остановки
+    function destroyCamera() {
+        if (html5QrCode) {
+            if (isCameraRunning) {
+                html5QrCode.stop().then(() => {
+                    isCameraRunning = false;
+                    html5QrCode = null;
+                    console.log('Камера полностью очищена');
+                }).catch(err => {
+                    console.error('Ошибка остановки:', err);
+                    html5QrCode = null;
+                    isCameraRunning = false;
+                });
+            } else {
+                html5QrCode = null;
+                isCameraRunning = false;
+            }
+        } else {
+            isCameraRunning = false;
+        }
+        // Очищаем элемент reader
+        const readerElement = document.getElementById('reader');
+        if (readerElement) {
+            readerElement.innerHTML = '';
+        }
+        // Скрываем кнопку остановки, показываем запуск
+        startCameraBtn.style.display = 'inline-block';
+        stopCameraBtn.style.display = 'none';
+    }
+
     function startCamera() {
-        if (html5QrCode && isCameraRunning) return;
+        // Если уже запущена, ничего не делаем
+        if (isCameraRunning) {
+            console.log('Камера уже запущена');
+            return;
+        }
+
+        // Полная очистка перед запуском
+        destroyCamera();
 
         const readerElement = document.getElementById('reader');
-        if (!readerElement) return;
+        if (!readerElement) {
+            console.error('Элемент reader не найден');
+            return;
+        }
 
+        // Создаём новый экземпляр
         html5QrCode = new Html5Qrcode("reader");
         html5QrCode.start(
             { facingMode: "environment" },
@@ -467,11 +516,16 @@ document.addEventListener('DOMContentLoaded', function() {
             onScanError
         ).then(() => {
             isCameraRunning = true;
+            startCameraBtn.style.display = 'none';
             stopCameraBtn.style.display = 'inline-block';
             console.log('Камера запущена');
         }).catch(err => {
             console.error('Ошибка запуска камеры:', err);
             showStatus('⚠️ Не удалось получить доступ к камере. Используйте ручной ввод.', 'warning');
+            // Сбрасываем состояние
+            html5QrCode = null;
+            isCameraRunning = false;
+            startCameraBtn.style.display = 'inline-block';
             stopCameraBtn.style.display = 'none';
         });
     }
@@ -480,28 +534,35 @@ document.addEventListener('DOMContentLoaded', function() {
         if (html5QrCode && isCameraRunning) {
             html5QrCode.stop().then(() => {
                 isCameraRunning = false;
+                startCameraBtn.style.display = 'inline-block';
                 stopCameraBtn.style.display = 'none';
                 console.log('Камера остановлена');
             }).catch(err => {
                 console.error('Ошибка остановки камеры:', err);
+                isCameraRunning = false;
+                startCameraBtn.style.display = 'inline-block';
+                stopCameraBtn.style.display = 'none';
             });
         } else {
             isCameraRunning = false;
+            startCameraBtn.style.display = 'inline-block';
             stopCameraBtn.style.display = 'none';
         }
     }
 
     function onScanSuccess(decodedText) {
-        let invNumber = decodedText;
-        processScan(invNumber);
+        processScan(decodedText);
     }
 
     function onScanError(error) {
         // Игнорируем
     }
 
+    // События кнопок
+    startCameraBtn.addEventListener('click', startCamera);
     stopCameraBtn.addEventListener('click', stopCamera);
 
+    // Ручной ввод
     manualBtn.addEventListener('click', function() {
         processScan(manualInput.value);
     });
@@ -516,6 +577,7 @@ document.addEventListener('DOMContentLoaded', function() {
         manualInput.focus();
     }
 
+    // Показываем офлайн-записи при загрузке
     const offlineScans = JSON.parse(localStorage.getItem(OFFLINE_KEY) || '[]');
     const unsyncedOffline = offlineScans.filter(s => !s.synced);
     if (unsyncedOffline.length > 0) {
@@ -527,8 +589,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Автоматический запуск камеры
-    startCamera();
+    // Автоматический запуск камеры (с небольшой задержкой для уверенности)
+    setTimeout(startCamera, 500);
 });
 </script>
 {% endblock %}
