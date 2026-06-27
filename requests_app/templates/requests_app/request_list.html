@@ -67,26 +67,49 @@
         padding: 4px 10px;
     }
 
+    /* Контекстное меню */
+    .custom-context-menu {
+        position: fixed;
+        z-index: 9999;
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        padding: 8px 0;
+        min-width: 200px;
+        display: none;
+    }
+    .custom-context-menu.menu-hidden {
+        display: none !important;
+    }
+    .custom-context-menu .menu-item {
+        display: block;
+        padding: 8px 20px;
+        color: #212529;
+        text-decoration: none;
+        font-size: 0.9rem;
+        transition: background 0.15s;
+    }
+    .custom-context-menu .menu-item:hover {
+        background: #f8f9fa;
+        color: #0d6efd;
+    }
+    .custom-context-menu .menu-item i {
+        width: 20px;
+        text-align: center;
+    }
+
     /* Адаптивные медиа-запросы */
     @media (max-width: 767.98px) {
-        /* Скрываем таблицу на мобильных, показываем карточки */
-        .table-desktop {
-            display: none;
-        }
-        .cards-mobile {
-            display: block;
-        }
+        .table-desktop { display: none; }
+        .cards-mobile { display: block; }
         .bulk-actions-bar {
             flex-direction: column;
             align-items: stretch;
             gap: 8px;
         }
-        .bulk-actions-bar .form-select-sm {
-            width: 100%;
-        }
-        .bulk-actions-bar .btn {
-            width: 100%;
-        }
+        .bulk-actions-bar .form-select-sm { width: 100%; }
+        .bulk-actions-bar .btn { width: 100%; }
         .filter-chips {
             display: flex;
             flex-wrap: wrap;
@@ -96,9 +119,7 @@
             font-size: 0.8rem;
             padding: 4px 10px;
         }
-        .search-group-wrapper .input-group {
-            width: 100%;
-        }
+        .search-group-wrapper .input-group { width: 100%; }
         .btn-icon-circle {
             width: 36px;
             height: 36px;
@@ -115,46 +136,32 @@
             padding: 6px 10px;
             font-size: 0.85rem;
         }
-        /* Скрываем некоторые колонки в карточках, если нужно */
-        .request-card .hide-mobile {
-            display: none;
-        }
+        .request-card .hide-mobile { display: none; }
     }
 
     @media (min-width: 768px) {
-        .table-desktop {
-            display: table;
-        }
-        .cards-mobile {
-            display: none;
-        }
+        .table-desktop { display: table; }
+        .cards-mobile { display: none; }
     }
 
-    /* Улучшенные тач-цели */
     .btn, .filter-chip, .page-link, .btn-icon-circle {
         touch-action: manipulation;
     }
-    .btn-sm {
-        padding: 6px 14px;
-    }
+    .btn-sm { padding: 6px 14px; }
     @media (max-width: 576px) {
         .btn-sm {
             padding: 8px 16px;
             font-size: 0.9rem;
         }
         .form-control, .form-select {
-            font-size: 16px; /* чтобы не было зума на iOS */
+            font-size: 16px;
         }
-        h2 {
-            font-size: 1.5rem;
-        }
+        h2 { font-size: 1.5rem; }
         .container {
             padding-left: 10px;
             padding-right: 10px;
         }
-        .card-body {
-            padding: 10px;
-        }
+        .card-body { padding: 10px; }
     }
 </style>
 {% endblock %}
@@ -164,16 +171,16 @@
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
         <h2 class="fw-semibold"><i class="bi bi-clipboard-check text-primary me-2"></i> Заявки</h2>
         <div class="d-flex flex-wrap gap-2">
-    <a href="{% url 'requests_app:request_create' %}" class="btn btn-outline-primary btn-sm rounded-pill px-3 py-1">
-        <i class="bi bi-plus-circle"></i> Новая заявка
-    </a>
-    <a href="{% url 'requests_app:custom_report' %}" class="btn btn-outline-info btn-sm rounded-pill px-3 py-1">
-        <i class="bi bi-file-earmark-text"></i> Отчёт
-    </a>
-    <a href="{% url 'requests_app:material_stock' %}" class="btn btn-outline-secondary btn-sm rounded-pill px-3 py-1">
-        <i class="bi bi-box-seam"></i> Материалы
-    </a>
-</div>
+            <a href="{% url 'requests_app:request_create' %}" class="btn btn-outline-primary btn-sm rounded-pill px-3 py-1">
+                <i class="bi bi-plus-circle"></i> Новая заявка
+            </a>
+            <a href="{% url 'requests_app:custom_report' %}" class="btn btn-outline-info btn-sm rounded-pill px-3 py-1">
+                <i class="bi bi-file-earmark-text"></i> Отчёт
+            </a>
+            <a href="{% url 'requests_app:material_stock' %}" class="btn btn-outline-secondary btn-sm rounded-pill px-3 py-1">
+                <i class="bi bi-box-seam"></i> Материалы
+            </a>
+        </div>
     </div>
 
     <!-- Быстрые фильтры (чипсы) -->
@@ -500,7 +507,7 @@
 </div>
 
 <!-- Контекстное меню для строки (скрыто на мобильных) -->
-<div id="status-context-menu" class="custom-context-menu d-none d-md-block" style="display: none;">
+<div id="status-context-menu" class="custom-context-menu menu-hidden d-none d-md-block">
     <div id="menu-assign" style="display: none;"><a href="#" class="menu-item" data-action="assign"><i class="bi bi-person-plus me-2"></i> Назначить исполнителя</a></div>
     <div id="menu-complete" style="display: none;"><a href="#" class="menu-item" data-action="complete"><i class="bi bi-check-circle me-2"></i> Отметить выполненной</a></div>
     <div id="menu-suspend" style="display: none;"><a href="#" class="menu-item" data-action="suspend"><i class="bi bi-pause-circle me-2"></i> Приостановить</a></div>
@@ -550,9 +557,13 @@
 
         if (typeof bootstrap !== 'undefined') {
             assignModal = new bootstrap.Modal(assignModalEl);
+            // При открытии модалки скрываем меню
+            assignModalEl.addEventListener('show.bs.modal', function() {
+                hideMenu();
+            });
         } else {
             assignModal = {
-                show: () => { assignModalEl.style.display = 'block'; assignModalEl.classList.add('show'); document.body.classList.add('modal-open'); },
+                show: () => { assignModalEl.style.display = 'block'; assignModalEl.classList.add('show'); document.body.classList.add('modal-open'); hideMenu(); },
                 hide: () => { assignModalEl.style.display = 'none'; assignModalEl.classList.remove('show'); document.body.classList.remove('modal-open'); }
             };
         }
@@ -695,6 +706,7 @@
                 if (actions.includes('close')) document.getElementById('menu-close').style.display = 'block';
                 
                 if (actions.length) {
+                    menu.classList.remove('menu-hidden');
                     menu.style.display = 'block';
                     let left = mouseX + 5;
                     let top = mouseY;
@@ -706,11 +718,14 @@
                     menu.style.left = left + 'px';
                     menu.style.top = top + 'px';
                 } else {
-                    menu.style.display = 'none';
+                    hideMenu();
                 }
             }
 
-            function hideMenu() { menu.style.display = 'none'; }
+            function hideMenu() {
+                menu.classList.add('menu-hidden');
+                menu.style.display = 'none';
+            }
 
             function assignExecutor(requestId, userId) {
                 if (!userId) return alert('Выберите исполнителя');
@@ -753,16 +768,25 @@
             window.addEventListener('scroll', hideMenu);
             window.addEventListener('resize', hideMenu);
 
+            // ===== ОБРАБОТЧИК ПУНКТОВ МЕНЮ =====
             document.querySelectorAll('.menu-item').forEach(item => {
-                item.addEventListener('click', e => {
+                item.addEventListener('click', function(e) {
                     e.preventDefault();
-                    const action = item.dataset.action;
-                    if (!activeRequestId) return;
-                    if (action === 'assign') {
-                        if (assignModal) assignModal.show();
+                    e.stopPropagation();
+                    const action = this.dataset.action;
+                    if (!activeRequestId) {
                         hideMenu();
                         return;
                     }
+
+                    // Скрываем меню немедленно
+                    hideMenu();
+
+                    if (action === 'assign') {
+                        if (assignModal) assignModal.show();
+                        return;
+                    }
+
                     const urls = {
                         'complete': `/requests/${activeRequestId}/complete/`,
                         'suspend': `/requests/${activeRequestId}/suspend/`,
@@ -771,6 +795,7 @@
                     };
                     const url = urls[action];
                     if (!url) return;
+
                     if (action === 'suspend') {
                         const reason = prompt('Введите причину приостановки:');
                         if (reason && reason.trim()) {
@@ -785,7 +810,9 @@
                         fetch(url, {
                             method: 'POST',
                             headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' }
-                        }).then(r => r.json()).then(data => {
+                        })
+                        .then(response => response.json())
+                        .then(data => {
                             if (data.success) {
                                 const row = document.querySelector(`tr[data-request-id="${activeRequestId}"]`);
                                 if (row) {
@@ -805,12 +832,16 @@
                                         }
                                     }
                                 }
-                            } else alert(data.message || 'Ошибка');
-                        }).catch(() => alert('Ошибка соединения'));
+                            } else {
+                                alert(data.message || 'Ошибка');
+                            }
+                        })
+                        .catch(() => {
+                            alert('Ошибка соединения');
+                        });
                     } else if (action === 'close') {
                         window.location.href = url;
                     }
-                    hideMenu();
                 });
             });
 

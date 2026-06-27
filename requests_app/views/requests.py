@@ -8,31 +8,40 @@
 Используют сервисный слой, декораторы прав и логирование.
 """
 
-from django.db.models import Q, Count
-from django.http import HttpResponse, JsonResponse
-from django.shortcuts import render, get_object_or_404, redirect
+import csv
+import logging
+from decimal import Decimal
+
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.contrib import messages
-import logging
-import csv
-from decimal import Decimal
+from django.db.models import Q, Count
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 
 from users.models import UserRole
 from ..models import (
-    ServiceRequest, UsedMaterial, Material, RequestType,
-    RequestHistory, RequestFile, RequestAssignee, RequestSettings
+    ServiceRequest,
+    UsedMaterial,
+    Material,
+    RequestType,
+    RequestFile,
+    RequestAssignee,
+    RequestSettings,
 )
-from ..forms import (
-    ReportForm
+from ..forms import ReportForm
+from .decorators import (
+    admin_required,
+    assign_required,
+    can_close_request_required,
+    can_edit_request_required,
+    can_mark_completed_required,
+    can_resume_required,
+    can_suspend_required,
+    can_view_request_required,
+    manager_required,
 )
 from .permissions import can_edit_any_request, can_assign_request
-from .decorators import (
-    admin_required, manager_required, assign_required,
-    can_view_request_required, can_edit_request_required,
-    can_mark_completed_required, can_suspend_required,
-    can_resume_required, can_close_request_required
-)
 from ..services import RequestService
 
 logger = logging.getLogger(__name__)
@@ -453,6 +462,7 @@ def custom_report(request):
     }
     return render(request, 'requests_app/custom_report.html', context)
 
+
 @login_required
 @manager_required
 def bulk_status_update(request):
@@ -514,15 +524,15 @@ def bulk_status_update(request):
         messages.error(request, message)
         return redirect('requests_app:request_list')
 
-    # Для не-админов запрещаем закрытие, но оно уже отсечено выше
-
     qs = ServiceRequest.objects.filter(id__in=ids)
     if role != UserRole.ADMIN:
         qs = qs.exclude(status='closed')
+
     updated_count = qs.update(status=new_status)
 
+    # Создаём записи истории через сервис
     for req in qs:
-        RequestHistory.objects.create(
+        RequestService.add_history_entry(
             request=req,
             user=user,
             action=f'Статус изменён на "{dict(ServiceRequest.STATUS_CHOICES).get(new_status, new_status)}" (массовое обновление)'

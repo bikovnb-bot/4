@@ -14,6 +14,17 @@ class RequestService:
     """Сервис для управления заявками."""
 
     @staticmethod
+    def add_history_entry(request, user, action, old_value=None, new_value=None):
+        """Создаёт запись в истории заявки."""
+        RequestHistory.objects.create(
+            request=request,
+            user=user,
+            action=action,
+            old_value=old_value,
+            new_value=new_value,
+        )
+
+    @staticmethod
     def create_request(data, created_by, files=None):
         request = ServiceRequest(**data)
         request.created_by = created_by
@@ -67,10 +78,10 @@ class RequestService:
         if request.status == 'new':
             request.status = 'in_progress'
         request.save()
-        RequestHistory.objects.create(
+        RequestService.add_history_entry(
             request=request,
             user=user,
-            action=f'Назначен исполнитель: {assigned_to.get_full_name() or assigned_to.username}',
+            action=f'Назначен исполнитель: {assigned_to.get_full_name() or assigned_to.username}'
         )
         return True, 'Исполнитель назначен'
 
@@ -83,7 +94,7 @@ class RequestService:
         if time_spent and time_spent.isdigit():
             request.time_spent = int(time_spent)
         request.save()
-        RequestHistory.objects.create(
+        RequestService.add_history_entry(
             request=request,
             user=user,
             action='Заявка отмечена как выполненная' + (f' (время: {time_spent} мин)' if time_spent else '')
@@ -97,10 +108,10 @@ class RequestService:
         request.status = 'suspended'
         request.suspension_reason = reason
         request.save()
-        RequestHistory.objects.create(
+        RequestService.add_history_entry(
             request=request,
             user=user,
-            action=f'Заявка приостановлена. Причина: {reason}',
+            action=f'Заявка приостановлена. Причина: {reason}'
         )
         return True, 'Заявка приостановлена'
 
@@ -108,10 +119,10 @@ class RequestService:
     def resume_request(request, user):
         request.status = 'in_progress'
         request.save()
-        RequestHistory.objects.create(
+        RequestService.add_history_entry(
             request=request,
             user=user,
-            action='Заявка возобновлена',
+            action='Заявка возобновлена'
         )
         return True, 'Заявка возобновлена'
 
@@ -154,7 +165,6 @@ class RequestService:
                 )
                 material.quantity_in_stock -= qty
                 material.save()
-                # Аудит
                 MaterialTransaction.objects.create(
                     material=material,
                     request=request,
@@ -165,7 +175,7 @@ class RequestService:
                 materials_used = True
             request.status = 'closed'
             request.save()
-            RequestHistory.objects.create(
+            RequestService.add_history_entry(
                 request=request,
                 user=user,
                 action='Заявка закрыта' + (' (с материалами)' if materials_used else ' (без материалов)')
@@ -180,7 +190,7 @@ class RequestService:
             return False, 'Пользователь не найден'
         obj, created = RequestAssignee.objects.get_or_create(request=request, user=assignee)
         if created:
-            RequestHistory.objects.create(
+            RequestService.add_history_entry(
                 request=request,
                 user=user,
                 action=f'Добавлен исполнитель: {assignee.get_full_name() or assignee.username}'
@@ -196,7 +206,7 @@ class RequestService:
             return False, 'Исполнитель не найден'
         assignee_name = assignee.user.get_full_name() or assignee.user.username
         assignee.delete()
-        RequestHistory.objects.create(
+        RequestService.add_history_entry(
             request=request,
             user=user,
             action=f'Удалён исполнитель: {assignee_name}'
@@ -205,10 +215,10 @@ class RequestService:
 
     @staticmethod
     def delete_request(request, user):
-        RequestHistory.objects.create(
+        RequestService.add_history_entry(
             request=request,
             user=user,
-            action='Заявка удалена',
+            action='Заявка удалена'
         )
         request.delete()
         return True, f'Заявка {request.request_number} удалена.'

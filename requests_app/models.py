@@ -86,6 +86,16 @@ class ServiceRequest(models.Model):
             models.Index(fields=['planned_date']),
         ]
 
+    def clean(self):
+        """Валидация на уровне модели (пользовательские проверки)."""
+        # Плановая дата не может быть в прошлом только для новых заявок
+        if not self.pk and self.planned_date and self.planned_date < timezone.now().date():
+            raise ValidationError({'planned_date': 'Плановая дата для новой заявки не может быть в прошлом.'})
+        if self.completed_date and self.created_at and self.completed_date < self.created_at:
+            raise ValidationError({'completed_date': 'Дата выполнения не может быть раньше даты создания.'})
+        if self.section and self.building and self.section.building != self.building:
+            raise ValidationError({'section': 'Секция не принадлежит выбранному зданию.'})
+
     def save(self, *args, **kwargs):
         if not self.request_number:
             from django.db import transaction
@@ -96,12 +106,20 @@ class ServiceRequest(models.Model):
                 seq.last_number += 1
                 seq.save()
                 self.request_number = f"ЗЯ-{seq.last_number:06d}"
+        if not self.created_at:
+            self.created_at = timezone.now()
+        # Вызываем только наши пользовательские проверки (не full_clean, чтобы не блокировать null-поля)
+        self.clean()
         super().save(*args, **kwargs)
 
     def return_materials_to_stock(self):
+        """Возвращает использованные материалы на склад (при откате из closed)."""
         from .models import Material, MaterialTransaction
         for used in self.used_materials.all():
-            material = Material.objects.filter(name=used.name).first()
+            material = used.material
+            # fallback на случай, если material = None (например, из бэкапа)
+            if not material:
+                material = Material.objects.filter(name=used.name).first()
             if material:
                 material.quantity_in_stock += used.quantity
                 material.save()

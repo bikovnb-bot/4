@@ -437,6 +437,110 @@
         });
     </script>
 
+    <!-- Cookie-баннер -->
+    <div id="cookie-banner" class="cookie-banner" style="display: none;">
+        <div class="cookie-content">
+            <p>
+                Мы используем файлы cookie для улучшения работы сайта. 
+                Продолжая использовать сайт, вы соглашаетесь с нашей 
+                <a href="{% url 'core:privacy_policy' %}" target="_blank">политикой обработки персональных данных</a>.
+            </p>
+            <div class="cookie-buttons">
+                <button id="cookie-accept-all" class="btn btn-primary btn-sm">Принять все</button>
+                <button id="cookie-decline" class="btn btn-secondary btn-sm">Отклонить</button>
+                <button id="cookie-customize" class="btn btn-link btn-sm">Настроить</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .cookie-banner {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(0,0,0,0.85);
+            color: #fff;
+            padding: 1rem 2rem;
+            z-index: 9999;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
+        }
+        .cookie-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+        .cookie-content p {
+            margin: 0;
+            flex: 1 1 60%;
+            font-size: 0.95rem;
+        }
+        .cookie-content a {
+            color: #ffc107;
+            text-decoration: underline;
+        }
+        .cookie-buttons {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .cookie-buttons .btn-link {
+            color: #ccc;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        .cookie-buttons .btn-link:hover {
+            color: #fff;
+        }
+        @media (max-width: 768px) {
+            .cookie-content {
+                flex-direction: column;
+                align-items: stretch;
+                text-align: center;
+            }
+            .cookie-buttons {
+                justify-content: center;
+            }
+        }
+    </style>
+
+    <script>
+        (function() {
+            const consent = localStorage.getItem('cookieConsent');
+            if (consent === null) {
+                document.getElementById('cookie-banner').style.display = 'block';
+            } else {
+                document.getElementById('cookie-banner').style.display = 'none';
+                if (consent === 'all') {
+                    // Здесь можно активировать аналитику
+                }
+            }
+
+            function setConsent(value) {
+                localStorage.setItem('cookieConsent', value);
+                document.getElementById('cookie-banner').style.display = 'none';
+                if (value === 'all') {
+                    // Загружаем скрипты аналитики, если нужно
+                }
+            }
+
+            document.getElementById('cookie-accept-all').addEventListener('click', function() {
+                setConsent('all');
+            });
+            document.getElementById('cookie-decline').addEventListener('click', function() {
+                setConsent('decline');
+            });
+            document.getElementById('cookie-customize').addEventListener('click', function() {
+                alert('Функция настройки будет добавлена позже.');
+            });
+        })();
+    </script>
+
     {% block extra_js %}{% endblock %}
 </body>
 </html>

@@ -6,34 +6,62 @@
     <div class="dashboard-module">
         <h2>{% trans "Быстрый доступ" %}</h2>
         <div class="dashboard-card-container">
+            <!-- Заявки -->
             <div class="card">
                 <h3>📋 Заявки</h3>
                 <p>Управление заявками, статусы, назначение.</p>
                 <a href="{% url 'admin:requests_app_servicerequest_changelist' %}" class="button">Перейти</a>
             </div>
+            <!-- Договоры -->
             <div class="card">
                 <h3>📄 Договоры</h3>
                 <p>Эксплуатационные договоры, оплаты, документы.</p>
                 <a href="{% url 'admin:exploitation_app_operationcontract_changelist' %}" class="button">Перейти</a>
             </div>
+            <!-- Здания -->
             <div class="card">
                 <h3>🏢 Здания</h3>
                 <p>Справочник зданий, секций, документов.</p>
                 <a href="{% url 'admin:buildings_building_changelist' %}" class="button">Перейти</a>
             </div>
+            <!-- Счётчики (энергия) -->
             <div class="card">
                 <h3>🔌 Счётчики</h3>
                 <p>Приборы учёта, показания, тарифы, аномалии.</p>
                 <a href="{% url 'admin:energy_meter_changelist' %}" class="button">Перейти</a>
             </div>
+            <!-- Пользователи -->
             <div class="card">
                 <h3>👥 Пользователи</h3>
                 <p>Управление пользователями и ролями.</p>
                 <a href="{% url 'admin:auth_user_changelist' %}" class="button">Перейти</a>
             </div>
+            <!-- Имущество (Assets) -->
+            <div class="card">
+                <h3>🔧 Имущество</h3>
+                <p>Учёт основных средств, инвентарные номера, QR-коды.</p>
+                <a href="{% url 'admin:assets_asset_changelist' %}" class="button">Перейти</a>
+            </div>
+            <!-- Материалы (из заявок) -->
+            <div class="card">
+                <h3>📦 Материалы</h3>
+                <p>Складской учёт, остатки, цены, транзакции.</p>
+                <a href="{% url 'admin:requests_app_material_changelist' %}" class="button">Перейти</a>
+            </div>
+            <!-- Баги и предложения -->
+            <div class="card">
+                <h3>🐛 Баги</h3>
+                <p>Управление багами, статусы, приоритеты.</p>
+                <a href="{% url 'admin:feedback_bug_changelist' %}" class="button">Перейти</a>
+            </div>
+            <div class="card">
+                <h3>💡 Предложения</h3>
+                <p>Управление предложениями, голоса, статусы.</p>
+                <a href="{% url 'admin:feedback_suggestion_changelist' %}" class="button">Перейти</a>
+            </div>
         </div>
     </div>
-    <!-- Стандартные блоки приложений (список моделей) -->
+    <!-- ВЫВОДИМ СТАНДАРТНЫЕ БЛОКИ ПРИЛОЖЕНИЙ И ПОСЛЕДНИЕ ДЕЙСТВИЯ -->
     {{ block.super }}
 </div>
 {% endblock %}

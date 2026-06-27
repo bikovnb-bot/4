@@ -103,21 +103,24 @@ def get_dashboard_context(year=None, month=None):
     )['avg']
     avg_hours = (avg_seconds.total_seconds() / 3600) if avg_seconds else 0
 
-    worker_ids = qs.filter(assigned_to__isnull=False).values_list('assigned_to', flat=True).distinct()
+    # --- ИСПРАВЛЕНИЕ: формируем уникальный список всех исполнителей (основных и дополнительных) ---
+    assignee_users = set()
+    for req in qs.select_related('assigned_to').prefetch_related('assignees__user'):
+        if req.assigned_to:
+            assignee_users.add(req.assigned_to)
+        for assignee in req.assignees.all():
+            assignee_users.add(assignee.user)
+
     worker_stats = []
     total_completed_closed = completed_closed
-    for user_id in worker_ids:
+    for user_obj in assignee_users:
         completed_count = qs.filter(
-            Q(assigned_to_id=user_id) | Q(assignees__user_id=user_id),
+            Q(assigned_to=user_obj) | Q(assignees__user=user_obj),
             status__in=['completed', 'closed']
         ).distinct().count()
         total_assigned = qs.filter(
-            Q(assigned_to_id=user_id) | Q(assignees__user_id=user_id)
+            Q(assigned_to=user_obj) | Q(assignees__user=user_obj)
         ).distinct().count()
-        try:
-            user_obj = User.objects.get(pk=user_id)
-        except User.DoesNotExist:
-            continue
         percent = (completed_count / total_completed_closed * 100) if total_completed_closed else 0
         worker_stats.append({
             'name': user_obj.get_full_name() or user_obj.username,
@@ -187,3 +190,21 @@ def get_dashboard_context(year=None, month=None):
     }
     cache.set(cache_key, context, 60*5)  # 5 минут
     return context
+
+
+@login_required
+def request_dashboard(request):
+    from users.models import UserRole
+    user = request.user
+    role = user.profile.role if hasattr(user, 'profile') else None
+    if role not in [UserRole.ADMIN, UserRole.ENGINEER, UserRole.DISPATCHER]:
+        messages.error(request, 'У вас нет доступа к дашборду.')
+        return redirect('requests_app:request_list')
+
+    year = int(request.GET.get('year', timezone.now().year))
+    month = int(request.GET.get('month', timezone.now().month))
+
+    context = get_dashboard_context(year, month)
+    context['all_widgets'] = []
+    context['visible_widgets'] = []
+    return render(request, 'requests_app/dashboard.html', context)

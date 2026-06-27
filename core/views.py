@@ -1,5 +1,5 @@
 # core/views.py
-# Исправленная версия: оставлена исходная функция home, добавлен unified_dashboard
+# Полная версия: home, unified_dashboard, privacy_policy, CustomLoginView
 
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
@@ -17,6 +17,11 @@ from energy.utils import get_avg_consumption, is_anomaly
 from exploitation_app.views import get_dashboard_context as get_contracts_context
 from requests_app.views import get_dashboard_context as get_requests_context
 from energy.views import get_dashboard_context as get_energy_context
+
+# Импорты для кастомной формы входа
+from django.contrib.auth.views import LoginView
+from django.urls import reverse_lazy
+from .forms import CustomLoginForm
 
 
 @login_required
@@ -246,3 +251,20 @@ def unified_dashboard(request):
         ],
     }
     return render(request, 'core/unified_dashboard.html', context)
+
+
+def privacy_policy(request):
+    """Страница с политикой обработки персональных данных."""
+    return render(request, 'core/privacy_policy.html')
+
+
+class CustomLoginView(LoginView):
+    """
+    Представление входа с кастомной формой, требующей согласия на обработку ПД.
+    """
+    form_class = CustomLoginForm
+    template_name = 'registration/login.html'
+    redirect_authenticated_user = True
+
+    def get_success_url(self):
+        return reverse_lazy('core:home')
